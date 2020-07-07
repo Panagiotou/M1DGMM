@@ -11,7 +11,8 @@ os.chdir('C:/Users/rfuchs/Documents/GitHub/DDGMM')
 from copy import deepcopy
 from itertools import product
 
-from identifiability_DGMM import identifiable_estim_DGMM, compute_z_moments
+from identifiability_DGMM import identifiable_estim_DGMM, compute_z_moments,\
+        diagonal_cond
 from sklearn.linear_model import LogisticRegression, LinearRegression
 from factor_analyzer import FactorAnalyzer
 from sklearn.mixture import GaussianMixture
@@ -80,6 +81,7 @@ def get_MFA_params(zl, kl, rl_nextl):
     for j in range(kl):
         indices = (s == j)
         fa = FactorAnalyzer(rotation = None, method = 'ml', n_factors = rl_nextl[1])
+        #fa.fit(np.atleast_2d(zl[indices]).T)
         fa.fit(zl[indices])
 
         psi[j] = np.diag(fa.get_uniquenesses())
@@ -130,8 +132,8 @@ def dim_reduce_init(y, n_clusters, k, r, nj, var_distrib, use_famd = False, seed
         z1 = pca.fit_transform(y).values
 
     elif use_famd:
-        famd = prince.FAMD(n_components = r[0], n_iter=3, copy=True, check_input=True, \
-                               engine='auto', random_state = seed)
+        famd = prince.FAMD(n_components = r[0], n_iter=3, copy=True, check_input=False, \
+                               engine='auto', random_state = seed)#), accept_sparse = True)
         z1 = famd.fit_transform(y).values
             
         # Encode categorical datas
@@ -151,24 +153,26 @@ def dim_reduce_init(y, n_clusters, k, r, nj, var_distrib, use_famd = False, seed
         #z1 = mca.row_coordinates(y).values.astype(float)
         
     z = [z1]
-    y = y.values.astype(int)
+    y = y.values#.astype(int)
 
     #==============================================================
     # Set the shape parameters of each data type
     #==============================================================    
     
-    y_bin = y[:, np.logical_or(var_distrib == 'bernoulli', var_distrib == 'binomial')]
-    nj_bin = nj[np.logical_or(var_distrib == 'bernoulli',var_distrib == 'binomial')]
+    y_bin = y[:, np.logical_or(var_distrib == 'bernoulli',\
+                               var_distrib == 'binomial')].astype(int)
+    nj_bin = nj[np.logical_or(var_distrib == 'bernoulli',\
+                              var_distrib == 'binomial')]
     nb_bin = len(nj_bin)
     
-    y_ord = y[:, var_distrib == 'ordinal']    
+    y_ord = y[:, var_distrib == 'ordinal'].astype(int)    
     nj_ord = nj[var_distrib == 'ordinal']
     nb_ord = len(nj_ord)
     
     y_cont = y[:, var_distrib == 'continuous'] 
     
     # Set y_count standard error to 1
-    y_cont = y_cont / y_cont.std(axis = 0, keepdims = True)
+    y_cont = y_cont / np.std(y_cont.astype(np.float), axis = 0, keepdims = True)
     
     nb_cont = y_cont.shape[1]    
 
@@ -211,7 +215,9 @@ def dim_reduce_init(y, n_clusters, k, r, nj, var_distrib, use_famd = False, seed
         
     Ez1, AT = compute_z_moments(w_s, mu_s, sigma_s)
     eta, H, psi = identifiable_estim_DGMM(eta, H, psi, Ez1, AT)
-    
+    H = diagonal_cond(H, psi)
+
+
     init['eta']  = eta     
     init['H'] = H
     init['psi'] = psi
