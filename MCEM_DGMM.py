@@ -105,7 +105,7 @@ def fz2_z1s(pzl1_ys, z2_z1s, chsi, rho, S):
             pz2_z1sm = np.zeros((M[l], M[l + 1], S[l]))  
             for s in range(S[l]):
                 for m in range(M[l]): 
-                    pz2_z1sm[m, :, s] = mvnorm.logpdf(z2_z1s[l][m,:,s], \
+                    pz2_z1sm[m, :, s] = mvnorm.pdf(z2_z1s[l][m,:,s], \
                                     mean = rho[l][m, s, :, 0], \
                                     cov = chsi[l][s])
                 

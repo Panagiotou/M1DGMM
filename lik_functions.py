@@ -14,7 +14,7 @@ from numeric_stability import log_1plusexp, expit
 
 
 def log_py_zM_bin_j(lambda_bin_j, y_bin_j, zM, k, nj_bin_j): 
-    ''' Compute log p(y_j | zM, s1 = k1) of the jth
+    ''' Compute log p(y_j | zM, s1 = k1) of the jth binary/count variable
     
     lambda_bin_j ( (r + 1) 1darray): Coefficients of the binomial distributions in the GLLVM layer
     y_bin_j (numobs 1darray): The subset containing only the binary/count variables in the dataset
@@ -162,6 +162,15 @@ def ord_loglik_j(lambda_ord_j, y_oh_j, zM, k, ps_y, p_z_ys, nj_ord_j):
 ######################################################################
 
 def log_py_zM_cont(lambda_cont, y_cont, zM, k):
+    ''' Compute sum_j log p(y_j | zM, s1 = k1) of all the continuous data with a for loop
+    
+    lambda_cont (nb_cont x (r + 1) ndarray): Coefficients of the continuous distributions in the GLLVM layer
+    y_cont (numobs x nb_cont ndarray): The subset containing only the continuous variables in the dataset
+    zM (M x r x k ndarray): M Monte Carlo copies of z for each component k1 of the mixture
+    k (int): The number of components of the mixture
+    --------------------------------------------------------------
+    returns (ndarray): sum_j p(y_j | zM, s1 = k1)
+    '''
     log_pyzM = 0
     nb_cont = y_cont.shape[1]
     
@@ -171,7 +180,15 @@ def log_py_zM_cont(lambda_cont, y_cont, zM, k):
     return log_pyzM
 
 def log_py_zM_cont_j(lambda_cont_j, y_cont_j, zM, k):
+    ''' Compute log p(y_j | zM, s1 = k1) of the jth continuous variable
     
+    lambda_cont_j ( (r + 1) 1darray): Coefficients of the continuous distributions in the GLLVM layer
+    y_cont_j (numobs 1darray): The subset containing only the continuous variables in the dataset
+    zM (M x r x k ndarray): M Monte Carlo copies of z for each component k1 of the mixture
+    k (int): The number of components of the mixture
+    --------------------------------------------------------------
+    returns (ndarray): p(y_j | zM, s1 = k1)
+    '''
     r = zM.shape[1]
     M = zM.shape[0]
 
@@ -184,5 +201,16 @@ def log_py_zM_cont_j(lambda_cont_j, y_cont_j, zM, k):
     return t(- 0.5 * (np.log(2 * np.pi) + (yg - eta) ** 2), (0, 2, 1))
 
 def cont_loglik_j(lambda_cont_j, y_cont_j, zM, k, ps_y, p_z_ys):
+    ''' Compute the expected log-likelihood for each continuous variable y_j
+    
+    lambda_cont_j ( (r + 1) 1darray): Coefficients of the continuous distributions in the GLLVM layer
+    y_cont_j (numobs 1darray): The subset containing only the continuous variables in the dataset
+    zM (M x r x k ndarray): M Monte Carlo copies of z for each component k1 of the mixture
+    k (int): The number of components of the mixture
+    ps_y (numobs x k ndarray): p(s_i = k1 | y_i) for all k1 in [1,k] and i in [1,numobs]
+    p_z_ys (M x numobs x k ndarray): p(z_i | y_i, s_i = k) for all m in [1,M], k1 in [1,k] and i in [1,numobs]
+    --------------------------------------------------------------
+    returns (float): E_{zM, s | y, theta}(y_bin_j | zM, s1 = k1)
+    ''' 
     log_pyzM_j = log_py_zM_cont_j(lambda_cont_j, y_cont_j, zM, k)
     return -np.sum(ps_y * np.sum(p_z_ys * log_pyzM_j, axis = 0))

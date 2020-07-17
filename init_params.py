@@ -6,7 +6,7 @@ Created on Mon Feb 10 16:55:44 2020
 """
 
 import os
-os.chdir('C:/Users/rfuchs/Documents/GitHub/DDGMM')
+os.chdir('C:/Users/rfuchs/Documents/GitHub/M1DGMM')
 
 from copy import deepcopy
 from itertools import product
@@ -30,6 +30,9 @@ from bevel.linear_ordinal_regression import  OrderedLogit
 
 import autograd.numpy as np
 from autograd.numpy import newaxis as n_axis
+
+from sklearn.preprocessing import StandardScaler
+
 
 ####################################################################################
 ################### MCA GMM + Logistic Regressions initialisation ##################
@@ -123,7 +126,7 @@ def dim_reduce_init(y, n_clusters, k, r, nj, var_distrib, use_famd = False, seed
     if type(y) != pd.core.frame.DataFrame:
         raise TypeError('y should be a dataframe for prince')
     
-    if (var_distrib == 'ordinal').all():
+    if (np.array(var_distrib) == 'ordinal').all():
         print('PCA init')
 
         pca = prince.PCA(n_components = r[0], n_iter=3, rescale_with_mean=True,\
@@ -133,7 +136,7 @@ def dim_reduce_init(y, n_clusters, k, r, nj, var_distrib, use_famd = False, seed
 
     elif use_famd:
         famd = prince.FAMD(n_components = r[0], n_iter=3, copy=True, check_input=False, \
-                               engine='auto', random_state = seed)#), accept_sparse = True)
+                               engine='auto', random_state = seed)
         z1 = famd.fit_transform(y).values
             
         # Encode categorical datas
@@ -169,11 +172,11 @@ def dim_reduce_init(y, n_clusters, k, r, nj, var_distrib, use_famd = False, seed
     nj_ord = nj[var_distrib == 'ordinal']
     nb_ord = len(nj_ord)
     
-    y_cont = y[:, var_distrib == 'continuous'] 
     
     # Set y_count standard error to 1
-    y_cont = y_cont / np.std(y_cont.astype(np.float), axis = 0, keepdims = True)
+    y_cont = y[:, var_distrib == 'continuous'] 
     
+    y_cont = y_cont / np.std(y_cont.astype(np.float), axis = 0, keepdims = True)
     nb_cont = y_cont.shape[1]    
 
     #=======================================================
