@@ -18,14 +18,15 @@ import autograd.numpy as np
     #   #return (it_nb * np.array(r)).astype(int) # Linear growth rate here
 
 
-def M_growth(it_nb, r):
+def M_growth(it_nb, r, numobs):
     ''' Function that controls the growth rate of M through the iterations
     it_num (int): The current iteration number
     r (list of int): The dimensions of each layer
     ---------------------------------------------------------------------
     returns (1d-array of int): The number of MC points to sample on each layer
     '''
-    return (2 * np.array(r)).astype(int)
+    return ((40 / np.log(numobs)) * it_nb * np.sqrt(r)).astype(int) 
+          
     
 def look_for_simpler_network(it_num):
     ''' Returns whether or not a new architecture of the network have to be 

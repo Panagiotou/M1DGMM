@@ -34,7 +34,7 @@ def rl1_selection(y_bin, y_ord, zl1_ys, w_s):
     ## PVALUE_THRESHOLD: The p-value threshold to zero a coefficient in ordinal
     ### logistic regression 
         
-    PROP_ZERO_THRESHOLD = 0.5
+    PROP_ZERO_THRESHOLD = 0.25
     PVALUE_THRESHOLD = 0.10
     
     # Detemine the dimensions that are weakest for Binomial variables
@@ -71,6 +71,7 @@ def rl1_selection(y_bin, y_ord, zl1_ys, w_s):
     
     # Voting: Delete the dimensions which have been zeroed a majority of times 
     zeroed_coeff_prop = zero_coef_mask / ((nb_ord + nb_bin))
+    print(zeroed_coeff_prop)
     
     # Need at least r1 = 2 for algorithm to work
     new_rl = np.sum(zeroed_coeff_prop <= PROP_ZERO_THRESHOLD)
@@ -81,6 +82,8 @@ def rl1_selection(y_bin, y_ord, zl1_ys, w_s):
     else:
         dims_to_keep = list(set(range(r0))  - \
                         set(np.where(zeroed_coeff_prop > PROP_ZERO_THRESHOLD)[0].tolist()))
+            
+    dims_to_keep = np.sort(dims_to_keep)
 
     return dims_to_keep
 
@@ -116,11 +119,16 @@ def other_r_selection(rl1_select, z2_z1s):
             new_rl = np.sum(average_corr > CORR_THRESHOLD)
         
             if prev_new_r[l] > new_rl: # Respect r1 > r2 > r3 ....
-                dims_to_keep.append(np.where(average_corr > CORR_THRESHOLD)[0].tolist())
+                wanted_dims = np.where(average_corr > CORR_THRESHOLD)[0].tolist()
+                wanted_dims = np.sort(wanted_dims)
+                dims_to_keep.append(wanted_dims)
+                
             else: # Have to delete other dimensions to match r1 > r2 > r3 ....
                 nb_dims_to_remove = old_rl - prev_new_r[l] + 1
                 unwanted_dims = np.argpartition(average_corr, nb_dims_to_remove)[:nb_dims_to_remove]
                 wanted_dims = list(set(range(old_rl)) - set(unwanted_dims))
+                wanted_dims = np.sort(wanted_dims)
+
                 dims_to_keep.append(wanted_dims)
                 new_rl = len(wanted_dims)
                 
@@ -156,13 +164,14 @@ def k_select(w_s, k, new_L, clustering_layer):
 
         other_layers_indices = tuple(set(range(L)) - set([l]))
         components_proba = w.sum(other_layers_indices)
-        #print(components_proba)
         
         if l == clustering_layer:
             biggest_lik_comp = np.sort(components_proba.argsort()[::-1][:n_clusters])
             components_to_keep.append(biggest_lik_comp)
 
         else:
-            components_to_keep.append(np.where(components_proba > PROBA_THRESHOLD)[0])
+            comp_kept = np.where(components_proba > PROBA_THRESHOLD)[0]
+            comp_kept = np.sort(comp_kept)
+            components_to_keep.append(comp_kept)
     
     return components_to_keep

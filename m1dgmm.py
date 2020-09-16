@@ -54,7 +54,7 @@ def M1DGMM(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
     prev_lik = - 1E12
     best_lik = -1E12
     tol = 0.01
-    max_patience = 2
+    max_patience = 1
     patience = 0
     
     # Initialize the parameters
@@ -91,7 +91,7 @@ def M1DGMM(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
     L = len(k)
     k_aug = k + [1]
     S = np.array([np.prod(k_aug[l:]) for l in range(L + 1)])    
-    M = M_growth(1, r)
+    M = M_growth(1, r, numobs)
    
     assert nb_bin + nb_ord + nb_cont > 0 
     if nb_bin + nb_ord + nb_cont != len(var_distrib):
@@ -235,7 +235,7 @@ def M1DGMM(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
         
         if prev_lik < new_lik:
             patience = 0
-            M = M_growth(it_num + 2, r)
+            M = M_growth(it_num + 2, r, numobs)
         else:
             patience += 1
                           

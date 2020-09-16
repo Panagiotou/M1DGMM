@@ -67,9 +67,31 @@ def get_MFA_params(zl, kl, rl_nextl):
     # Fit a GMM in the continuous space
     #======================================================
     numobs = zl.shape[0]
+    
+    not_all_groups = True
+    max_trials = 100
+    empty_count_counter = 0
+    
+    while not_all_groups:
+        # If not enough obs per group then the MFA diverge...    
 
-    gmm = GaussianMixture(n_components = kl)
-    s = gmm.fit_predict(zl)
+        gmm = GaussianMixture(n_components = kl)
+        s = gmm.fit_predict(zl)
+        
+        clusters_found, count = np.unique(s, return_counts = True)
+
+        if (len(clusters_found) == kl) & (count >= 5).all():
+            not_all_groups = False
+            
+        empty_count_counter += 1
+        if empty_count_counter >= max_trials:
+            raise RuntimeError('Could not find a GMM init that presents the \
+                               proper number of groups:', kl)
+   
+    
+
+    #gmm = GaussianMixture(n_components = kl)
+    #s = gmm.fit_predict(zl)
     
     psi = np.full((kl, rl_nextl[0], rl_nextl[0]), 0).astype(float)
     psi_inv = np.full((kl, rl_nextl[0], rl_nextl[0]), 0).astype(float)
@@ -84,7 +106,6 @@ def get_MFA_params(zl, kl, rl_nextl):
     for j in range(kl):
         indices = (s == j)
         fa = FactorAnalyzer(rotation = None, method = 'ml', n_factors = rl_nextl[1])
-        #fa.fit(np.atleast_2d(zl[indices]).T)
         fa.fit(zl[indices])
 
         psi[j] = np.diag(fa.get_uniquenesses())
