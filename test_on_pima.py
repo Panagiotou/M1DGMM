@@ -184,7 +184,7 @@ r = np.array([5, 4, 2])
 numobs = len(y)
 k = [4, n_clusters]
 eps = 1E-05
-it = 30
+it = 2
 maxstep = 100
 
 nb_trials= 30
@@ -243,11 +243,13 @@ r = np.array([5, 4, 3])
 numobs = len(y)
 k = [4, n_clusters]
 eps = 1E-05
-it = 30
+it = 2
 maxstep = 100
 
 prince_init = dim_reduce_init(y, n_clusters, k, r, nj, var_distrib, seed = None)
 out = M1DGMM(y_np, n_clusters, r, k, prince_init, var_distrib, nj, it, eps, maxstep, seed = None)
+
+it = 30
 
 r = out['best_r']
 numobs = len(y)

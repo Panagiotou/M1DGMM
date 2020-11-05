@@ -55,9 +55,9 @@ p = y.shape[1]
 #===========================================#
 # Formating the data
 #===========================================#
-var_distrib = np.array(['categorical', 'continuous', 'continuous', 'categorical',\
-                        'categorical', 'categorical', 'continuous', 'categorical',\
-                        'categorical', 'continuous', 'categorical', 'categorical',\
+var_distrib = np.array(['bernoulli', 'continuous', 'continuous', 'categorical',\
+                        'categorical', 'categorical', 'continuous', 'bernoulli',\
+                        'bernoulli', 'continuous', 'bernoulli', 'categorical',\
                         'continuous', 'continuous']) 
  
 # No ordinal data 
@@ -191,7 +191,7 @@ r = np.array([5, 4, 3])
 numobs = len(y)
 k = [4, n_clusters]
 eps = 1E-05
-it = 30
+it = 2
 maxstep = 100
 
 prince_init = dim_reduce_init(y, n_clusters, k, r, nj, var_distrib, seed = None)

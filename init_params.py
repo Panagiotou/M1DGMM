@@ -5,8 +5,6 @@ Created on Mon Feb 10 16:55:44 2020
 @author: RobF
 """
 
-import os
-os.chdir('C:/Users/rfuchs/Documents/GitHub/M1DGMM')
 
 from copy import deepcopy
 from itertools import product

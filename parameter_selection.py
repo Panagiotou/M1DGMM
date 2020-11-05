@@ -46,11 +46,12 @@ def rl1_selection(y_bin, y_ord, y_categ, zl1_ys, w_s):
     for j in range(nb_bin):
         for s in range(S0):
             Nj = np.max(y_bin[:,j]) # The support of the jth binomial is [1, Nj]
+            
             if Nj ==  1:  # If the variable is Bernoulli not binomial
                 yj = y_bin[:,j]
                 z = zl1_ys[:,:,:,s]
             else: # If not, need to convert Binomial output to Bernoulli output
-                yj, z = bin_to_bern(Nj, y_bin[:,j], z[0])
+                yj, z = bin_to_bern(Nj, y_bin[:,j], zl1_ys[:,:,:,s])
         
             # Put all the M0 points in a series
             X = z.flatten(order = 'C').reshape((M0 * numobs, r0), order = 'C')
