@@ -17,7 +17,8 @@ from MCEM_DGMM import draw_z_s, fz2_z1s, draw_z2_z1s, fz_ys,\
     E_step_DGMM, M_step_DGMM
 
 from MCEM_GLLVM import draw_zl1_ys, fy_zl1, E_step_GLLVM, \
-        bin_params_GLLVM, ord_params_GLLVM, cont_params_GLLVM
+        bin_params_GLLVM, ord_params_GLLVM, categ_params_GLLVM,\
+            cont_params_GLLVM
   
 from hyperparameters_selection import M_growth, look_for_simpler_network
 from utilities import compute_path_params, compute_chsi, compute_rho
@@ -33,7 +34,7 @@ def M1DGMM(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
     
     ''' Fit a Generalized Linear Mixture of Latent Variables Model (GLMLVM)
     
-    y (numobs x p ndarray): The observations containing categorical variables
+    y (numobs x p ndarray): The observations containing mixed variables
     n_clusters (int): The number of clusters to look for in the data
     r (list): The dimension of latent variables through the first 2 layers
     k (list): The number of components of the latent Gaussian mixture layers
@@ -63,6 +64,7 @@ def M1DGMM(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
     lambda_bin = deepcopy(init['lambda_bin'])
     lambda_ord = deepcopy(init['lambda_ord'])
     lambda_cont = deepcopy(init['lambda_cont'])
+    lambda_categ = deepcopy(init['lambda_categ'])
 
     H = deepcopy(init['H'])
     w_s = deepcopy(init['w_s']) # Probability of path s' through the network for all s' in Omega
@@ -75,12 +77,16 @@ def M1DGMM(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
         
     # Dispatch variables between categories
     y_bin = y[:, np.logical_or(var_distrib == 'bernoulli',var_distrib == 'binomial')]
-    nj_bin = nj[np.logical_or(var_distrib == 'bernoulli',var_distrib == 'binomial')]
+    nj_bin = nj[np.logical_or(var_distrib == 'bernoulli',var_distrib == 'binomial')].astype(int)
     nb_bin = len(nj_bin)
         
     y_ord = y[:, var_distrib == 'ordinal']    
-    nj_ord = nj[var_distrib == 'ordinal']
+    nj_ord = nj[var_distrib == 'ordinal'].astype(int)
     nb_ord = len(nj_ord)
+    
+    y_categ = y[:, var_distrib == 'categorical']
+    nj_categ = nj[var_distrib == 'categorical'].astype(int)
+    nb_categ = len(nj_categ)    
     
     y_cont = y[:, var_distrib == 'continuous'] 
     nb_cont = y_cont.shape[1]
@@ -93,8 +99,8 @@ def M1DGMM(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
     S = np.array([np.prod(k_aug[l:]) for l in range(L + 1)])    
     M = M_growth(1, r, numobs)
    
-    assert nb_bin + nb_ord + nb_cont > 0 
-    if nb_bin + nb_ord + nb_cont != len(var_distrib):
+    assert nb_bin + nb_ord + nb_cont + nb_categ > 0 
+    if nb_bin + nb_ord + nb_cont + nb_categ != len(var_distrib):
         raise ValueError('Some variable types were not understood,\
                          existing types are: continuous, categorical,\
                          ordinal, binomial and bernoulli')
@@ -134,7 +140,7 @@ def M1DGMM(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
         #=======================================================================
         
         py_zl1 = fy_zl1(lambda_bin, y_bin, nj_bin, lambda_ord, y_ord, nj_ord, \
-                        y_cont, lambda_cont, z_s[0])
+                        lambda_categ, y_categ, nj_categ, y_cont, lambda_cont, z_s[0])
         
         #========================================================================
         # Draw from p(z1 | y, s) proportional to p(y | z1) * p(z1 | s) for all s
@@ -200,6 +206,9 @@ def M1DGMM(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
         lambda_ord = ord_params_GLLVM(y_ord, nj_ord, lambda_ord, ps_y, pzl1_ys, z_s[0], AT,\
                      tol = tol, maxstep = maxstep)
             
+        lambda_categ = categ_params_GLLVM(y_categ, nj_categ, lambda_categ, ps_y, pzl1_ys, z_s[0], AT,\
+                     tol = tol, maxstep = maxstep)
+
         lambda_cont = cont_params_GLLVM(y_cont, lambda_cont, ps_y, pzl1_ys, z_s[0], AT,\
                      tol = tol, maxstep = maxstep)
 
@@ -246,7 +255,7 @@ def M1DGMM(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
         is_not_min_specif = not(np.all(np.array(k) == n_clusters) & np.array_equal(r, [2,1]))
         
         if look_for_simpler_network(it_num) & perform_selec & is_not_min_specif:
-            r_to_keep = r_select(y_bin, y_ord, zl1_ys, z2_z1s, w_s)
+            r_to_keep = r_select(y_bin, y_ord, y_categ, zl1_ys, z2_z1s, w_s)
             
             # If r_l == 0, delete the last l + 1: layers
             new_L = np.sum([len(rl) != 0 for rl in r_to_keep]) - 1 
@@ -287,12 +296,19 @@ def M1DGMM(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
                     lambda_ord = [np.concatenate([lambda_ord_intercept[j], Lambda_ord_var[j]])\
                                   for j in range(nb_ord)]
     
-    
                 # To recheck
                 if nb_cont > 0:
                     # Add the intercept:
                     cont_r_to_keep = np.concatenate([[0], np.array(r_to_keep[0]) + 1]) 
-                    lambda_cont = lambda_cont[:, cont_r_to_keep]    
+                    lambda_cont = lambda_cont[:, cont_r_to_keep]  
+                    
+                if nb_categ > 0:
+                    lambda_categ_intercept = [lambda_categ[j][:, 0]  for j in range(nb_categ)]
+                    Lambda_categ_var = [lambda_categ_j[:,-r[0]:] for lambda_categ_j in lambda_categ]
+                    Lambda_categ_var = [lambda_categ_j[:, r_to_keep[0]] for lambda_categ_j in lambda_categ]
+
+                    lambda_categ = [np.hstack([lambda_categ_intercept[j][..., n_axis], Lambda_categ_var[j]])\
+                                   for j in range(nb_categ)]  
 
                 w = w_s.reshape(*k, order = 'C')
                 new_k_idx_grid = np.ix_(*k_to_keep[:new_L])

@@ -193,6 +193,9 @@ def dim_reduce_init(y, n_clusters, k, r, nj, var_distrib, use_famd = False, seed
     nj_ord = nj[var_distrib == 'ordinal']
     nb_ord = len(nj_ord)
     
+    y_categ = y[:, var_distrib == 'categorical']
+    nj_categ = nj[var_distrib == 'categorical']
+    nb_categ = len(nj_categ)
     
     # Set y_count standard error to 1
     y_cont = y[:, var_distrib == 'continuous'] 
@@ -314,11 +317,27 @@ def dim_reduce_init(y, n_clusters, k, r, nj, var_distrib, use_famd = False, seed
             lambda_cont[j] = np.concatenate([[linr.intercept_], linr.coef_])
     
     ## Identifiability of continuous coefficients
-    lambda_cont[:,1:] = lambda_cont[:,1:] @ AT[0]         
+    lambda_cont[:,1:] = lambda_cont[:,1:] @ AT[0]  
+
+
+    # Determining lambda_categ coefficients
+    lambda_categ = []
+    
+    for j in range(nb_categ):
+        yj = y_categ[:,j]
+        
+        lr = LogisticRegression(multi_class = 'multinomial')
+        lr.fit(z[0], yj)        
+
+        ## Identifiability of categ coefficients
+        beta_j = lr.coef_ @ AT[0]   
+        lambda_categ.append(np.hstack([lr.intercept_[...,n_axis], beta_j]))  
+           
                 
     init['lambda_bin'] = lambda_bin
     init['lambda_ord'] = lambda_ord
     init['lambda_cont'] = lambda_cont
+    init['lambda_categ'] = lambda_categ
     
     return init
 

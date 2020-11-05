@@ -89,6 +89,12 @@ y_np_nenc = y_nenc_typed.values
 # Defining distances over the non encoded features
 dm = gower_matrix(y_nenc_typed, cat_features = cf_non_enc) 
 
+dtype = {y.columns[j]: np.float64 if (var_distrib[j] != 'bernoulli') and \
+        (var_distrib[j] != 'categorical') else np.str for j in range(p_new)}
+
+y = y.astype(dtype, copy=True)
+
+
 #===========================================#
 # Running the algorithm
 #===========================================# 
@@ -103,11 +109,6 @@ init_seed = 2
 eps = 1E-05
 it = 20
 maxstep = 100
-
-dtype = {y.columns[j]: np.float64 if (var_distrib[j] != 'bernoulli') & \
-        (var_distrib[j] != 'categorical') else np.str for j in range(p_new)}
-
-y = y.astype(dtype, copy=True)
 
 
 prince_init = dim_reduce_init(y, n_clusters, k, r, nj, var_distrib, seed = None,\

@@ -17,8 +17,17 @@ warnings.simplefilter('default')
 
 import autograd.numpy as np
 
-def rl1_selection(y_bin, y_ord, zl1_ys, w_s):
-
+def rl1_selection(y_bin, y_ord, y_categ, zl1_ys, w_s):
+    ''' 
+        Selects the number of factor on the first latent discrete layer 
+        <Add arguments description>
+        Hyperparameters:
+        PROP_ZERO_THRESHOLD : The limit proportion of time a coefficient has 
+        been found to be zero before this dimension is deleted
+        PVALUE_THRESHOLD: The p-value threshold to zero a coefficient in ordinal
+        logistic regression 
+    '''
+    
     M0 = zl1_ys.shape[0]
     numobs = zl1_ys.shape[1] 
     r0 = zl1_ys.shape[2]
@@ -26,14 +35,9 @@ def rl1_selection(y_bin, y_ord, zl1_ys, w_s):
 
     nb_bin = y_bin.shape[1]
     nb_ord = y_ord.shape[1]
-    
-    # Define the hyperparameters: 
-    ## PROP_ZERO_THRESHOLD : The limit proportion of time a coefficient has 
-    ### been found to be zero before this dimension is deleted
-    
-    ## PVALUE_THRESHOLD: The p-value threshold to zero a coefficient in ordinal
-    ### logistic regression 
-        
+    nb_categ = y_categ.shape[1]
+
+            
     PROP_ZERO_THRESHOLD = 0.25
     PVALUE_THRESHOLD = 0.10
     
@@ -56,7 +60,6 @@ def rl1_selection(y_bin, y_ord, zl1_ys, w_s):
             lr.fit(X, y_repeat)
             zero_coef_mask += (lr.coef_[0] == 0) * w_s[s]
     
-    #print(zero_coef_mask)
     # Detemine the dimensions that are weakest for Ordinal variables
     for j in range(nb_ord):
         for s in range(S0):
@@ -67,11 +70,23 @@ def rl1_selection(y_bin, y_ord, zl1_ys, w_s):
             ol.fit(X, y_repeat)
             zero_coef_mask += np.array(ol.summary['p'] > PVALUE_THRESHOLD) * w_s[s]
     
-    #print(zero_coef_mask)
-    
+    # Detemine the dimensions that are weakest for Categorical variables
+    for j in range(nb_categ):
+        for s in range(S0):
+            z = zl1_ys[:,:,:,s]
+                        
+            # Put all the M0 points in a series
+            X = z.flatten(order = 'C').reshape((M0 * numobs, r0), order = 'C')
+            y_repeat = np.repeat(y_categ[:,j], M0).astype(int) # Repeat rather than tile to check
+            
+            lr = LogisticRegression(penalty = 'l1', solver = 'saga', \
+                                    multi_class = 'multinomial')            
+            lr.fit(X, y_repeat)  
+            
+            zero_coef_mask += (lr.coef_[0] == 0) * w_s[s]    
+            
     # Voting: Delete the dimensions which have been zeroed a majority of times 
-    zeroed_coeff_prop = zero_coef_mask / ((nb_ord + nb_bin))
-    print(zeroed_coeff_prop)
+    zeroed_coeff_prop = zero_coef_mask / ((nb_ord + nb_bin + nb_categ))
     
     # Need at least r1 = 2 for algorithm to work
     new_rl = np.sum(zeroed_coeff_prop <= PROP_ZERO_THRESHOLD)
@@ -137,10 +152,10 @@ def other_r_selection(rl1_select, z2_z1s):
     return dims_to_keep
 
 
-def r_select(y_bin, y_ord, zl1_ys, z2_z1s, w_s):
+def r_select(y_bin, y_ord, y_categ, zl1_ys, z2_z1s, w_s):
     ''' Automatic choice of dimension of each layer components '''
 
-    rl1_select = rl1_selection(y_bin, y_ord, zl1_ys, w_s)
+    rl1_select = rl1_selection(y_bin, y_ord, y_categ, zl1_ys, w_s)
     other_r_select =  other_r_selection(rl1_select, z2_z1s)
     return [rl1_select] + other_r_select
 

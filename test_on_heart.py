@@ -73,7 +73,16 @@ y_categ_non_enc = deepcopy(y)
 vd_categ_non_enc = deepcopy(var_distrib)
 
 # Encode categorical datas
-y, var_distrib = gen_categ_as_bin_dataset(y, var_distrib)
+#y, var_distrib = gen_categ_as_bin_dataset(y, var_distrib)
+
+#######################################################
+# Test to encode categorical variables
+le = LabelEncoder()
+for col_idx, colname in enumerate(y.columns):
+    if var_distrib[col_idx] == 'categorical': 
+        y[colname] = le.fit_transform(y[colname])
+
+#################################################
 
 # Encode binary data
 le = LabelEncoder()
@@ -84,7 +93,7 @@ for col_idx, colname in enumerate(y.columns):
 enc = OneHotEncoder(sparse = False, drop = 'first')
 labels_oh = enc.fit_transform(np.array(labels).reshape(-1,1)).flatten()
 
-nj, nj_bin, nj_ord = compute_nj(y, var_distrib)
+nj, nj_bin, nj_ord, nj_categ = compute_nj(y, var_distrib)
 y_np = y.values
 nb_cont = np.sum(var_distrib == 'continuous')
 
@@ -101,6 +110,11 @@ y_np_nenc = y_nenc_typed.values
 # Defining distances over the non encoded features
 dm = gower_matrix(y_nenc_typed, cat_features = cf_non_enc) 
 
+dtype = {y.columns[j]: np.float64 if (var_distrib[j] != 'bernoulli') and \
+        (var_distrib[j] != 'categorical') else np.str for j in range(p_new)}
+
+y = y.astype(dtype, copy=True)
+
 #===========================================#
 # Running the algorithm
 #===========================================# 
@@ -116,11 +130,11 @@ eps = 1E-05
 it = 50
 maxstep = 100
 
-dtype = {y.columns[j]: np.float64 if (var_distrib[j] != 'bernoulli') & \
-        (var_distrib[j] != 'categorical') else np.str for j in range(p_new)}
 
-y = y.astype(dtype, copy=True)
-
+'''
+init = prince_init
+y = y_np
+'''
 
 prince_init = dim_reduce_init(y, n_clusters, k, r, nj, var_distrib, seed = None,\
                               use_famd=False)
