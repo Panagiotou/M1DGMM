@@ -12,7 +12,8 @@ from autograd.numpy import newaxis as n_axis
 from autograd.numpy import transpose as t
 from autograd.numpy.linalg import cholesky, pinv, eigh
 
-def compute_z_moments(w_s, mu_s, sigma_s):
+
+def compute_z_moments(w_s, eta_old, H_old, psi_old):
     ''' Compute the first moment and the variance of the latent variable 
     w_s (list of length s1): The path probabilities for all s in S1
     mu_s (list of nd-arrays): The means of the Gaussians starting at each layer
@@ -20,17 +21,66 @@ def compute_z_moments(w_s, mu_s, sigma_s):
     -------------------------------------------------------------------------
     returns (tuple of length 2): E(z^{(1)}) and Var(z^{(1)})  
     '''
-    full_paths_proba = w_s[..., n_axis, n_axis]
     
-    muTmu = mu_s[0] @ t(mu_s[0], (0, 2, 1)) 
-    E_z1z1T = (full_paths_proba * (sigma_s[0] + muTmu)).sum(0, keepdims = True)
-    Ez1 = (full_paths_proba * mu_s[0]).sum(0, keepdims = True)
+    k = [eta.shape[0] for eta in eta_old]
+    L = len(eta_old) 
     
-    var_z1 = E_z1z1T - Ez1 @ t(Ez1, (0,2,1)) 
-    var_z1 = ensure_psd([var_z1])[0] # Numeric stability check
-    AT = cholesky(var_z1)
+    Ez = [[] for l in range(L)]
+    AT = [[] for l in range(L)]
+    
+    w_reshaped = w_s.reshape(*k, order = 'C')
+    
+    for l in reversed(range(L)):
+        # Compute E(z^{(l)})
+        idx_to_sum = tuple(set(range(L)) - set([l]))
+        
+        wl = w_reshaped.sum(idx_to_sum)[..., n_axis, n_axis]
+        Ezl = (wl * eta_old[l]).sum(0, keepdims = True)
+        Ez[l] = Ezl
+        
+        etaTeta = eta_old[l] @ t(eta_old[l], (0, 2, 1)) 
+        HlHlT = H_old[l] @ t(H_old[l], (0, 2, 1)) 
+        
+        E_zlzlT = (wl * (HlHlT + psi_old[l] + etaTeta)).sum(0, keepdims = True)
+        var_zl = E_zlzlT - Ezl @ t(Ezl, (0,2,1)) 
+        var_zl = ensure_psd([var_zl])[0] # Numeric stability check
+        AT_l = cholesky(var_zl)
 
-    return Ez1, AT
+        AT[l] = AT_l
+
+    return Ez, AT
+
+
+def identifiable_estim_DGMM(eta_old, H_old, psi_old, Ez, AT):
+    ''' Enforce identifiability conditions for DGMM estimators
+    eta_old (list of nb_layers elements of shape (K_l x r_{l-1}, 1)): mu  
+                        estimators of the previous iteration for each layer
+    H_old (list of nb_layers elements of shape (K_l x r_l-1, r_l)): Lambda 
+                        estimators of the previous iteration for each layer
+    psi (list of nb_layers elements of shape (K_l x r_l-1, r_l-1)): Psi 
+                        estimators of the previous iteration for each layer
+    Ez1 ((1, k1, 1) ndarray): E(z^{(1)})
+    AT ((1, k1, k1) ndarray): Var(z^{(1)})^{-1/2 T}
+    -------------------------------------------------------------------------
+    returns (tuple of length 3): "identifiable" esimators of eta, Lambda and Psi
+    ''' 
+
+
+    L = len(eta_old)
+    
+    eta_new = [[] for l in range(L)]
+    H_new = [[] for l in range(L)]
+    psi_new = [[] for l in range(L)]
+    
+    for l in reversed(range(L)):
+        inv_AT = pinv(AT[l])
+
+        # Identifiability 
+        psi_new[l] = inv_AT @ psi_old[l] @ t(inv_AT, (0, 2, 1))
+        H_new[l] = inv_AT @ H_old[l]
+        eta_new[l] = inv_AT @ (eta_old[l] -  Ez[l])    
+        
+    return eta_new, H_new, psi_new
 
 
 def diagonal_cond(H_old, psi_old):
@@ -51,31 +101,3 @@ def diagonal_cond(H_old, psi_old):
         values, vec  = eigh(B)
         H.append(H_old[l] @ vec)
     return H
-
-def identifiable_estim_DGMM(eta_old, H_old, psi_old, Ez1, AT):
-    ''' Enforce identifiability conditions for DGMM estimators
-    eta_old (list of nb_layers elements of shape (K_l x r_{l-1}, 1)): mu  
-                        estimators of the previous iteration for each layer
-    H_old (list of nb_layers elements of shape (K_l x r_l-1, r_l)): Lambda 
-                        estimators of the previous iteration for each layer
-    psi (list of nb_layers elements of shape (K_l x r_l-1, r_l-1)): Psi 
-                        estimators of the previous iteration for each layer
-    Ez1 ((1, k1, 1) ndarray): E(z^{(1)})
-    AT ((1, k1, k1) ndarray): Var(z^{(1)})^{-1/2 T}
-    -------------------------------------------------------------------------
-    returns (tuple of length 3): "identifiable" esimators of eta, Lambda and Psi
-    ''' 
-
-    eta_new = deepcopy(eta_old)
-    H_new = deepcopy(H_old)
-    psi_new = deepcopy(psi_old)
-        
-    inv_AT = pinv(AT) 
-    
-    # Identifiability 
-    psi_new[0] = inv_AT @ psi_old[0] @ t(inv_AT, (0, 2, 1))
-    H_new[0] = inv_AT @ H_old[0]
-    eta_new[0] = inv_AT @ (eta_old[0] -  Ez1)    
-    
-    return eta_new, H_new, psi_new
-

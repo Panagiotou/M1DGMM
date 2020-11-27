@@ -119,7 +119,7 @@ y = y.astype(dtype, copy=True)
 # Running the algorithm
 #===========================================# 
 
-r = np.array([2, 1])
+r = np.array([3, 2])
 numobs = len(y)
 k = [n_clusters]
 
@@ -134,6 +134,7 @@ maxstep = 100
 '''
 init = prince_init
 y = y_np
+perform_selec = True
 '''
 
 prince_init = dim_reduce_init(y, n_clusters, k, r, nj, var_distrib, seed = None,\
@@ -143,7 +144,8 @@ print(m)
 print(confusion_matrix(labels_oh, pred))
 print(silhouette_score(dm, pred, metric = 'precomputed'))
 
-out = M1DGMM(y_np, n_clusters, r, k, prince_init, var_distrib, nj, it, eps, maxstep, seed)
+out = M1DGMM(y_np, n_clusters, r, k, prince_init, var_distrib, nj, it,\
+             eps, maxstep, seed, perform_selec = False)
 m, pred = misc(labels_oh, out['classes'], True) 
 print(m)
 print(confusion_matrix(labels_oh, pred))
@@ -211,13 +213,13 @@ r = np.array([5, 4, 3])
 numobs = len(y)
 k = [4, n_clusters]
 eps = 1E-05
-it = 2
+it = 3
 maxstep = 100
 
 
 # First fing the best architecture 
 prince_init = dim_reduce_init(y, n_clusters, k, r, nj, var_distrib, seed = None)
-out = M1DGMM(y_np, n_clusters, r, k, prince_init, var_distrib, nj, it, eps, maxstep, seed = None)
+out = M1DGMM(y_np, n_clusters, r, k, prince_init, var_distrib, nj, it, eps, maxstep, seed = None, perform_selec=True)
 
 r = out['best_r']
 numobs = len(y)
@@ -243,6 +245,7 @@ for i in range(nb_trials):
         sil = silhouette_score(dm, pred, metric = 'precomputed')
         micro = precision_score(labels_oh, pred, average = 'micro')
         macro = precision_score(labels_oh, pred, average = 'macro')
+        print(sil)
         print(micro)
         print(macro)
 

@@ -15,11 +15,9 @@ from sklearn.linear_model import LogisticRegression, LinearRegression
 from factor_analyzer import FactorAnalyzer
 from sklearn.mixture import GaussianMixture
 
-from data_preprocessing import gen_categ_as_bin_dataset, bin_to_bern
-from utilities import compute_path_params
-    
 from sklearn.preprocessing import LabelEncoder 
-
+from data_preprocessing import gen_categ_as_bin_dataset, bin_to_bern
+    
 import prince
 import pandas as pd
 
@@ -236,13 +234,10 @@ def dim_reduce_init(y, n_clusters, k, r, nj, var_distrib, use_famd = False, seed
     # Enforcing identifiability constraints over the first layer
     #=============================================================
     
-    mu_s, sigma_s = compute_path_params(eta, H, psi)
-        
-    Ez1, AT = compute_z_moments(w_s, mu_s, sigma_s)
-    eta, H, psi = identifiable_estim_DGMM(eta, H, psi, Ez1, AT)
-    H = diagonal_cond(H, psi)
-
-
+    H = diagonal_cond(H, psi)        
+    Ez, AT = compute_z_moments(w_s, eta, H, psi)
+    eta, H, psi = identifiable_estim_DGMM(eta, H, psi, Ez, AT)
+    
     init['eta']  = eta     
     init['H'] = H
     init['psi'] = psi
@@ -283,7 +278,7 @@ def dim_reduce_init(y, n_clusters, k, r, nj, var_distrib, use_famd = False, seed
             lambda_bin[j] = np.concatenate([lr.intercept_, lr.coef_[0]])
     
     ## Identifiability of bin coefficients
-    lambda_bin[:,1:] = lambda_bin[:,1:] @ AT[0] 
+    lambda_bin[:,1:] = lambda_bin[:,1:] @ AT[0][0] 
     
     # Determining lambda_ord coefficients
     lambda_ord = []
@@ -296,7 +291,7 @@ def dim_reduce_init(y, n_clusters, k, r, nj, var_distrib, use_famd = False, seed
         ol.fit(z[0], yj)
         
         ## Identifiability of ordinal coefficients
-        beta_j = (ol.beta_.reshape(1, r[0]) @ AT[0]).flatten()
+        beta_j = (ol.beta_.reshape(1, r[0]) @ AT[0][0]).flatten()
         lambda_ord_j = np.concatenate([ol.alpha_, beta_j])
         lambda_ord.append(lambda_ord_j) 
             
@@ -315,7 +310,7 @@ def dim_reduce_init(y, n_clusters, k, r, nj, var_distrib, use_famd = False, seed
             lambda_cont[j] = np.concatenate([[linr.intercept_], linr.coef_])
     
     ## Identifiability of continuous coefficients
-    lambda_cont[:,1:] = lambda_cont[:,1:] @ AT[0]  
+    lambda_cont[:,1:] = lambda_cont[:,1:] @ AT[0][0]   
 
 
     # Determining lambda_categ coefficients
@@ -328,7 +323,7 @@ def dim_reduce_init(y, n_clusters, k, r, nj, var_distrib, use_famd = False, seed
         lr.fit(z[0], yj)        
 
         ## Identifiability of categ coefficients
-        beta_j = lr.coef_ @ AT[0]   
+        beta_j = lr.coef_ @ AT[0][0]   
         lambda_categ.append(np.hstack([lr.intercept_[...,n_axis], beta_j]))  
            
                 

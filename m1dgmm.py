@@ -27,6 +27,9 @@ import autograd.numpy as np
 from autograd.numpy import transpose as t
 from autograd.numpy import newaxis as n_axis
 
+from gower import gower_matrix
+from sklearn.metrics import silhouette_score
+
 #import matplotlib.pyplot as plt
 
 def M1DGMM(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
@@ -52,8 +55,15 @@ def M1DGMM(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
                     and a continuous representation of the data
     '''
 
-    prev_lik = - 1E12
-    best_lik = -1E12
+    prev_lik = - 1E16
+    best_lik = -1E16
+    
+    best_sil = -1 
+    new_sil = -1 
+    
+    best_k = deepcopy(k)
+    best_r = deepcopy(r)
+    
     tol = 0.01
     max_patience = 1
     patience = 0
@@ -104,7 +114,11 @@ def M1DGMM(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
         raise ValueError('Some variable types were not understood,\
                          existing types are: continuous, categorical,\
                          ordinal, binomial and bernoulli')
-                     
+
+    # Compute the Gower matrix
+    cat_features = np.logical_or(var_distrib == 'categorical', var_distrib == 'bernoulli')
+    dm = gower_matrix(y, cat_features = cat_features)
+                
     while (it_num < it) & ((ratio > eps) | (patience <= max_patience)):
         print(it_num)
 
@@ -173,7 +187,12 @@ def M1DGMM(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
         
         Ez_ys, E_z1z2T_ys, E_z2z2T_ys, EeeT_ys = \
             E_step_DGMM(zl1_ys, H, z_s, zc_s, z2_z1s, pz_ys, pz2_z1s, S)
-               
+            
+        print('E(z1 | y, s) =', np.abs(Ez_ys[0]).mean())
+        print('E(z1z2 | y, s) =',  np.abs(E_z1z2T_ys[0]).mean())
+        print('E(z2z2 | y, s) =',  np.abs(E_z2z2T_ys[0]).mean())
+        print('E(eeT | y, s) =',  np.abs(EeeT_ys[0]).mean())   
+        
         ###########################################################################
         ############################ M step #######################################
         ###########################################################################
@@ -184,32 +203,32 @@ def M1DGMM(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
 
         w_s = np.mean(ps_y, axis = 0)      
         eta, H, psi = M_step_DGMM(Ez_ys, E_z1z2T_ys, E_z2z2T_ys, EeeT_ys, ps_y, H, k)
-        H = diagonal_cond(H, psi)
 
         #=======================================================
         # Identifiability conditions
         #======================================================= 
+
+        # Update eta, H and Psi values
+        H = diagonal_cond(H, psi)
+        Ez, AT = compute_z_moments(w_s, eta, H, psi)
+        eta, H, psi = identifiable_estim_DGMM(eta, H, psi, Ez, AT)
         
-        # Update mu and sigma with new eta, H and Psi values
-        mu_s, sigma_s = compute_path_params(eta, H, psi)        
-        Ez1, AT = compute_z_moments(w_s, mu_s, sigma_s)
-        eta, H, psi = identifiable_estim_DGMM(eta, H, psi, Ez1, AT)
+        del(Ez)
         
-        del(Ez1)
         #=======================================================
         # Compute GLLVM Parameters
         #=======================================================
                         
-        lambda_bin = bin_params_GLLVM(y_bin, nj_bin, lambda_bin, ps_y, pzl1_ys, z_s[0], AT,\
+        lambda_bin = bin_params_GLLVM(y_bin, nj_bin, lambda_bin, ps_y, pzl1_ys, z_s[0], AT[0],\
                      tol = tol, maxstep = maxstep)
                  
-        lambda_ord = ord_params_GLLVM(y_ord, nj_ord, lambda_ord, ps_y, pzl1_ys, z_s[0], AT,\
+        lambda_ord = ord_params_GLLVM(y_ord, nj_ord, lambda_ord, ps_y, pzl1_ys, z_s[0], AT[0],\
                      tol = tol, maxstep = maxstep)
             
-        lambda_categ = categ_params_GLLVM(y_categ, nj_categ, lambda_categ, ps_y, pzl1_ys, z_s[0], AT,\
+        lambda_categ = categ_params_GLLVM(y_categ, nj_categ, lambda_categ, ps_y, pzl1_ys, z_s[0], AT[0],\
                      tol = tol, maxstep = maxstep)
 
-        lambda_cont = cont_params_GLLVM(y_cont, lambda_cont, ps_y, pzl1_ys, z_s[0], AT,\
+        lambda_cont = cont_params_GLLVM(y_cont, lambda_cont, ps_y, pzl1_ys, z_s[0], AT[0],\
                      tol = tol, maxstep = maxstep)
 
         ###########################################################################
@@ -220,17 +239,35 @@ def M1DGMM(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
         likelihood.append(new_lik)
         ratio = (new_lik - prev_lik)/abs(prev_lik)
         print(likelihood)
+        
+        idx_to_sum = tuple(set(range(1, L + 1)) - set([clustering_layer + 1]))
+        psl_y = ps_y.reshape(numobs, *k, order = 'C').sum(idx_to_sum) 
+
+        temp_class = np.argmax(psl_y, axis = 1)
+        try:
+            new_sil = silhouette_score(dm, temp_class, metric = 'precomputed')
+        except ValueError:
+            new_sil = -1
+            
+        if best_sil < new_sil:
+            z = (ps_y[..., n_axis] * Ez_ys[clustering_layer]).sum(1)
+            best_sil = deepcopy(new_sil)
+            classes = deepcopy(temp_class)
+
 
         # Refresh the classes only if they provide a better explanation of the data
         if best_lik < new_lik:
             best_lik = deepcopy(prev_lik)
             
-            idx_to_sum = tuple(set(range(1, L + 1)) - set([clustering_layer + 1]))
-            psl_y = ps_y.reshape(numobs, *k, order = 'C').sum(idx_to_sum) 
+            #idx_to_sum = tuple(set(range(1, L + 1)) - set([clustering_layer + 1]))
+            #psl_y = ps_y.reshape(numobs, *k, order = 'C').sum(idx_to_sum) 
 
-            classes = np.argmax(psl_y, axis = 1) 
+            #temp_class_l = np.argmax(psl_y, axis = 1)
+            #sil_l = silhouette_score(dm, temp_class_l, metric = 'precomputed')
             
-            z = (ps_y[..., n_axis] * Ez_ys[clustering_layer]).sum(1)
+            #classes = np.argmax(psl_y, axis = 1) 
+            
+            #z = (ps_y[..., n_axis] * Ez_ys[clustering_layer]).sum(1)
             
             '''
             fig = plt.figure(figsize=(8,8))
@@ -238,9 +275,6 @@ def M1DGMM(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
             plt.show()
             '''
             
-            best_r = deepcopy(r)
-            best_k = deepcopy(k)
-
         
         if prev_lik < new_lik:
             patience = 0
@@ -328,8 +362,18 @@ def M1DGMM(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
                 k_aug = k + [1]
                 S = np.array([np.prod(k_aug[l:]) for l in range(new_L + 1)])    
                 L = new_L
+
+                best_r = deepcopy(r)
+                best_k = deepcopy(k)
                 
                 patience = 0
+                
+                # Identifiability conditions
+                H = diagonal_cond(H, psi)
+                Ez, AT = compute_z_moments(w_s, eta, H, psi)
+                eta, H, psi = identifiable_estim_DGMM(eta, H, psi, Ez, AT)
+        
+                del(Ez)
                          
             print('New architecture:')
             print('k', k)
