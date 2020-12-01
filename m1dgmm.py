@@ -187,11 +187,12 @@ def M1DGMM(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
         
         Ez_ys, E_z1z2T_ys, E_z2z2T_ys, EeeT_ys = \
             E_step_DGMM(zl1_ys, H, z_s, zc_s, z2_z1s, pz_ys, pz2_z1s, S)
-            
+        '''  
         print('E(z1 | y, s) =', np.abs(Ez_ys[0]).mean())
         print('E(z1z2 | y, s) =',  np.abs(E_z1z2T_ys[0]).mean())
         print('E(z2z2 | y, s) =',  np.abs(E_z2z2T_ys[0]).mean())
-        print('E(eeT | y, s) =',  np.abs(EeeT_ys[0]).mean())   
+        print('E(eeT | y, s) =',  np.abs(EeeT_ys[0]).mean()) 
+        '''
         
         ###########################################################################
         ############################ M step #######################################

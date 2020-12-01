@@ -32,15 +32,17 @@ def draw_zl1_ys(z_s, py_zl1, M):
     ------------------------------------------------------------------------
     returns ((M1, numobs, r1, S1) nd-array): z^{(1)} | y, s
     '''
-    # Would be cleaner if just passed z1 rather than zl for all l and M1
-    # Rather than M[l] for all l
+    epsilon = 1E-16
     
     numobs = py_zl1.shape[1]
     L = len(z_s) - 1
     S = [z_s[l].shape[2] for l in range(L)]
     r = [z_s[l].shape[1] for l in range(L + 1)]
 
-    py_zl1_norm = py_zl1 / np.sum(py_zl1, axis = 0, keepdims = True) 
+    norm_cste = np.sum(py_zl1, axis = 0, keepdims = True) 
+    norm_cste = np.where(norm_cste <= epsilon, epsilon, norm_cste) 
+    
+    py_zl1_norm = py_zl1 / norm_cste
         
     zl1_ys = np.zeros((M[0], numobs, r[0], S[0]))
     for s in range(S[0]):
@@ -113,6 +115,8 @@ def E_step_GLLVM(zl1_s, mu_l1_s, sigma_l1_s, w_s, py_zl1):
     ----------------------------------------------------------------------------
     returns (tuple of len 3): p(z1 |y, s), p(s |y) and p(y)
     '''
+    epsilon = 1E-16
+
     M0 = zl1_s.shape[0]
     S0 = zl1_s.shape[2] 
     pzl1_s = np.zeros((M0, 1, S0))
@@ -121,16 +125,28 @@ def E_step_GLLVM(zl1_s, mu_l1_s, sigma_l1_s, w_s, py_zl1):
         pzl1_s[:,:, s] = mvnorm.pdf(zl1_s[:,:,s], mean = mu_l1_s[s].flatten(order = 'C'), \
                                            cov = sigma_l1_s[s])[..., n_axis]            
     # Compute p(y | s_i = 1)
-    pzl1_s_norm = pzl1_s / np.sum(pzl1_s, axis = 0, keepdims = True) 
+    norm_cste = np.sum(pzl1_s, axis = 0, keepdims = True) 
+    norm_cste = np.where(norm_cste <= epsilon, epsilon, norm_cste) 
+ 
+    pzl1_s_norm = pzl1_s / norm_cste
     py_s = (pzl1_s_norm * py_zl1).sum(axis = 0)
     
     # Compute p(z |y, s) and normalize it
-    pzl1_ys = pzl1_s * py_zl1 / py_s[n_axis]
-    pzl1_ys = pzl1_ys / np.sum(pzl1_ys, axis = 0, keepdims = True) 
+    norm_cste = py_s[n_axis]
+    norm_cste = np.where(norm_cste <= epsilon, epsilon, norm_cste) 
+    pzl1_ys = pzl1_s * py_zl1 / norm_cste
+    
+    norm_cste = np.sum(pzl1_ys, axis = 0, keepdims = True) 
+    norm_cste = np.where(norm_cste <= epsilon, epsilon, norm_cste)     
+    pzl1_ys = pzl1_ys / norm_cste
 
     # Compute unormalized (18)
     ps_y = w_s[n_axis] * py_s
-    ps_y = ps_y / np.sum(ps_y, axis = 1, keepdims = True)        
+
+    norm_cste = np.sum(ps_y, axis = 1, keepdims = True)     
+    norm_cste = np.where(norm_cste <= epsilon, epsilon, norm_cste)     
+
+    ps_y = ps_y / norm_cste  
     p_y = py_s @ w_s[..., n_axis]
      
     return pzl1_ys, ps_y, p_y

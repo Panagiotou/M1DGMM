@@ -96,7 +96,8 @@ def fz2_z1s(pzl1_ys, z2_z1s, chsi, rho, S):
     -------------------------------------------------------------------------
     returns (list of ndarrays): p(z^{(l)}| z^{(l-1)}, y)
     '''
-    
+    epsilon = 1E-16
+
     L = len(z2_z1s)
     M = [z2_z1s[l].shape[0] for l in range(L)] + [z2_z1s[-1].shape[1]]
     
@@ -108,8 +109,11 @@ def fz2_z1s(pzl1_ys, z2_z1s, chsi, rho, S):
                     pz2_z1sm[m, :, s] = mvnorm.pdf(z2_z1s[l][m,:,s], \
                                     mean = rho[l][m, s, :, 0], \
                                     cov = chsi[l][s])
-                
-            pz2_z1sm = pz2_z1sm / pz2_z1sm.sum(1, keepdims = True)
+            
+            norm_cste = pz2_z1sm.sum(1, keepdims = True)
+            norm_cste = np.where(norm_cste <= epsilon, epsilon, norm_cste) 
+
+            pz2_z1sm = pz2_z1sm / norm_cste
             pz2_z1sm = np.tile(pz2_z1sm, (1, 1, S[0]//S[l]))
             pz2_z1s.append(pz2_z1sm)
             
@@ -232,6 +236,8 @@ def M_step_DGMM(Ez_ys, E_z1z2T_ys, E_z2z2T_ys, EeeT_ys, ps_y, H_old, k):
     returns (list of ndarrays): The new estimators of eta, Lambda and Psi 
                                             for all components and all layers
     '''
+    epsilon = 1E-14
+
     L = len(E_z1z2T_ys)
     r = [Ez_ys[l].shape[2] for l in range(L + 1)]
     numobs = len(Ez_ys[0])
@@ -253,7 +259,7 @@ def M_step_DGMM(Ez_ys, E_z1z2T_ys, E_z2z2T_ys, EeeT_ys, ps_y, H_old, k):
 
         # Compute common denominator    
         den = ps_yl.sum(0)
-        den = np.where(den < 1E-14, 1E-14, den)  
+        den = np.where(den < epsilon, epsilon, den)  
         
         # eta estimator
         eta_num = Ez1_ys_l.sum(idx_to_sum)[..., n_axis] -\
