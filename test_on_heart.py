@@ -64,8 +64,7 @@ p = y.shape[1]
 var_distrib = np.array(['continuous', 'bernoulli', 'categorical', 'continuous',\
                         'continuous', 'bernoulli', 'categorical', 'continuous',\
                         'bernoulli', 'continuous', 'ordinal', 'ordinal',\
-                        'categorical']) # Last one is ordinal for me (but real
-                        # real in the data description)
+                        'categorical']) 
     
 # Ordinal data already encoded
  
@@ -73,16 +72,10 @@ y_categ_non_enc = deepcopy(y)
 vd_categ_non_enc = deepcopy(var_distrib)
 
 # Encode categorical datas
-#y, var_distrib = gen_categ_as_bin_dataset(y, var_distrib)
-
-#######################################################
-# Test to encode categorical variables
 le = LabelEncoder()
 for col_idx, colname in enumerate(y.columns):
     if var_distrib[col_idx] == 'categorical': 
         y[colname] = le.fit_transform(y[colname])
-
-#################################################
 
 # Encode binary data
 le = LabelEncoder()
@@ -119,7 +112,7 @@ y = y.astype(dtype, copy=True)
 # Running the algorithm
 #===========================================# 
 
-r = np.array([3, 2])
+r = np.array([2, 1])
 numobs = len(y)
 k = [n_clusters]
 
@@ -130,15 +123,8 @@ eps = 1E-05
 it = 50
 maxstep = 100
 
-
-'''
-init = prince_init
-y = y_np
-perform_selec = True
-'''
-
 prince_init = dim_reduce_init(y, n_clusters, k, r, nj, var_distrib, seed = None,\
-                              use_famd=False)
+                              use_famd=True)
 m, pred = misc(labels_oh, prince_init['classes'], True) 
 print(m)
 print(confusion_matrix(labels_oh, pred))
@@ -218,7 +204,7 @@ maxstep = 100
 
 
 # First fing the best architecture 
-prince_init = dim_reduce_init(y, n_clusters, k, r, nj, var_distrib, seed = None)
+prince_init = dim_reduce_init(y, n_clusters, k, r, nj, var_distrib, seed = None, use_famd = True)
 out = M1DGMM(y_np, n_clusters, r, k, prince_init, var_distrib, nj, it, eps, maxstep, seed = None, perform_selec=True)
 
 r = out['best_r']
@@ -231,11 +217,12 @@ maxstep = 100
 nb_trials= 30
 m1dgmm_res = pd.DataFrame(columns = ['it_id', 'micro', 'macro', 'silhouette'])
 
+
 for i in range(nb_trials):
 
     print(i)
     # Prince init
-    prince_init = dim_reduce_init(y, n_clusters, k, r, nj, var_distrib, seed = None)
+    prince_init = dim_reduce_init(y, n_clusters, k, r, nj, var_distrib, seed = None, use_famd = True)
 
     try:
         out = M1DGMM(y_np, n_clusters, r, k, prince_init, var_distrib, nj, it,\
@@ -260,4 +247,4 @@ for i in range(nb_trials):
 m1dgmm_res.mean()
 m1dgmm_res.std()
 
-m1dgmm_res.to_csv(res_folder + '/m1dgmm_res.csv')
+m1dgmm_res.to_csv(res_folder + '/m1dgmm_res_famd.csv')

@@ -227,6 +227,7 @@ def M_step_DGMM(Ez_ys, E_z1z2T_ys, E_z2z2T_ys, EeeT_ys, ps_y, H_old, k):
     Compute the estimators of eta, Lambda and Psi for all components and all layers
     Ez_ys (list of ndarrays): E(z^{(l)} | y, s) for all (l,s)
     E_z1z2T_ys (list of ndarrays):  E(z^{(l)}z^{(l+1)T} | y, s) 
+    E_z1z2T_ys (list of ndarrays):  E(z^{(l+1)}z^{(l+1)T} | y, s) 
     EeeT_ys (list of ndarrays): E(z^{(l+1)}z^{(l+1)T} | y, s), 
             E(e | y, s) with e = z^{(l)} - eta{k_l}^{(l)} - Lambda @ z^{(l + 1)}
     ps_y ((numobs, S) nd-array): p(s | y) for all s in Omega

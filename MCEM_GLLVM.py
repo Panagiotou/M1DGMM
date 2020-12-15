@@ -155,9 +155,6 @@ def E_step_GLLVM(zl1_s, mu_l1_s, sigma_l1_s, w_s, py_zl1):
 # M Step functions
 #=============================================================================
 
-# We optimize each column separately as it is faster than all column jointly 
-# (and more relevant with the independence hypothesis)
-
 def bin_params_GLLVM(y_bin, nj_bin, lambda_bin_old, ps_y, pzl1_ys, zl1_s, AT,\
                      tol = 1E-5, maxstep = 100):
     ''' Determine the GLLVM coefficients related to binomial coefficients by 
@@ -338,10 +335,6 @@ def cont_params_GLLVM(y_cont, lambda_cont_old, ps_y, pzl1_ys, zl1_s, AT,\
         
     return new_lambda_cont
 
-'''
-lambda_categ_old = deepcopy(lambda_categ)
-zl1_s = z_s[0]
-'''
 
 def categ_params_GLLVM(y_categ, nj_categ, lambda_categ_old, ps_y, pzl1_ys, zl1_s, AT,\
                      tol = 1E-5, maxstep = 100):

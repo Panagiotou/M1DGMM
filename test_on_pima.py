@@ -68,7 +68,7 @@ vd_categ_non_enc = deepcopy(var_distrib)
 enc = OneHotEncoder(sparse = False, drop = 'first')
 labels_oh = enc.fit_transform(np.array(labels).reshape(-1,1)).flatten()
 
-nj, nj_bin, nj_ord = compute_nj(y, var_distrib)
+nj, nj_bin, nj_ord, n_categ = compute_nj(y, var_distrib)
 y_np = y.values
 nb_cont = np.sum(var_distrib == 'continuous')
 
@@ -106,7 +106,7 @@ maxstep = 100
 
 
 prince_init = dim_reduce_init(y, n_clusters, k, r, nj, var_distrib, seed = None,\
-                              use_famd=False)
+                              use_famd=True)
 m, pred = misc(labels_oh, prince_init['classes'], True) 
 print(m)
 print(confusion_matrix(labels_oh, pred))
@@ -137,7 +137,6 @@ cb.ax.get_yaxis().set_ticks([])
 for j, lab in enumerate(['absence','presence']):
     cb.ax.text(.5, (2 * j + 1) / 4.0, lab, ha='center', va='center', rotation=90)
 cb.ax.get_yaxis().labelpad = 15
-#cb.ax.set_ylabel('# of contacts', rotation=270)
 
 
 #=========================================================================
@@ -179,66 +178,16 @@ mca_res.groupby('r').std()
 
 mca_res.to_csv(res_folder + '/mca_res.csv')
 
-# DDGMM. Thresholds use: 0.5 and 0.10
-r = np.array([5, 4, 2])
-numobs = len(y)
-k = [4, n_clusters]
-eps = 1E-05
-it = 2
-maxstep = 100
-
-nb_trials= 30
-ddgmm_res = pd.DataFrame(columns = ['it_id', 'micro', 'macro', 'purity'])
-
-
-
-# First fing the best architecture 
-prince_init = dim_reduce_init(y, n_clusters, k, r, nj, var_distrib, seed = None)
-out = DDGMM(y_np, n_clusters, r, k, prince_init, var_distrib, nj, it, eps, maxstep, seed = None)
-
-r = out['best_r']
-numobs = len(y)
-k = out['best_k']
-eps = 1E-05
-it = 30
-maxstep = 100
-
-nb_trials= 30
-ddgmm_res = pd.DataFrame(columns = ['it_id', 'micro', 'macro', 'purity'])
-
-for i in range(nb_trials):
-
-    print(i)
-    # Prince init
-    prince_init = dim_reduce_init(y, n_clusters, k, r, nj, var_distrib, seed = None)
-
-    try:
-        out = DDGMM(y_np, n_clusters, r, k, prince_init, var_distrib, nj, M, it, eps, maxstep, seed = None)
-        m, pred = misc(labels_oh, out['classes'], True) 
-        cm = confusion_matrix(labels_oh, pred)
-        purity = cluster_purity(cm)
-        
-        micro = precision_score(labels_oh, pred, average = 'micro')
-        macro = precision_score(labels_oh, pred, average = 'macro')
-        print(micro)
-        print(macro)
-
-        ddgmm_res = ddgmm_res.append({'it_id': i + 1, 'micro': micro, 'macro': macro, \
-                                    'purity': purity}, ignore_index=True)
-    except:
-        ddgmm_res = ddgmm_res.append({'it_id': i + 1, 'micro': np.nan, 'macro': np.nan, \
-                                    'purity': np.nan}, ignore_index=True)
-
-
-
-ddgmm_res.mean()
-ddgmm_res.std()
-
-ddgmm_res.to_csv(res_folder + '/ddgmm_res.csv')
 
 # MDGMM. Thresholds use: 0.25 and 0.10
 # r = [2, 1]
 # k = [2, 1]
+
+# Small hack to remove
+dtype['Pregnancies'] = np.str
+y = y.astype(dtype, copy=True)
+
+
 r = np.array([5, 4, 3])
 numobs = len(y)
 k = [4, n_clusters]
@@ -246,7 +195,7 @@ eps = 1E-05
 it = 2
 maxstep = 100
 
-prince_init = dim_reduce_init(y, n_clusters, k, r, nj, var_distrib, seed = None)
+prince_init = dim_reduce_init(y, n_clusters, k, r, nj, var_distrib, seed = None, use_famd = True)
 out = M1DGMM(y_np, n_clusters, r, k, prince_init, var_distrib, nj, it, eps, maxstep, seed = None)
 
 it = 30
@@ -265,7 +214,8 @@ for i in range(nb_trials):
 
     print(i)
     # Prince init
-    prince_init = dim_reduce_init(y, n_clusters, k, r, nj, var_distrib, seed = None)
+    prince_init = dim_reduce_init(y, n_clusters, k, r, nj, var_distrib,\
+                                  seed = None, use_famd = True)
 
     try:
         out = M1DGMM(y_np, n_clusters, r, k, prince_init, var_distrib, nj, it,\
@@ -289,4 +239,4 @@ for i in range(nb_trials):
 m1dgmm_res.mean()
 m1dgmm_res.std()
 
-m1dgmm_res.to_csv(res_folder + '/m1dgmm_res.csv')
+m1dgmm_res.to_csv(res_folder + '/m1dgmm_res_famd.csv')

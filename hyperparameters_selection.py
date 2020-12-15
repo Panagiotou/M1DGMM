@@ -7,16 +7,6 @@ Created on Mon Jun  8 09:30:16 2020
 
 import autograd.numpy as np
 
-# Old one for tictactoe and breast cancer
-#def M_growth(it_nb, r):
-    #''' Function that controls the growth rate of M through the iterations
-    #it_num (int): The current iteration number
-    #r (list of int): The dimensions of each layer
-    #---------------------------------------------------------------------
-    #returns (1d-array of int): The number of MC points to sample on each layer
-    #'''
-    #   #return (it_nb * np.array(r)).astype(int) # Linear growth rate here
-
 
 def M_growth(it_nb, r, numobs):
     ''' Function that controls the growth rate of M through the iterations

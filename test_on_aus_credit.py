@@ -66,14 +66,17 @@ y_categ_non_enc = deepcopy(y)
 vd_categ_non_enc = deepcopy(var_distrib)
 
 # Encode categorical datas
-y, var_distrib = gen_categ_as_bin_dataset(y, var_distrib)
+le = LabelEncoder()
+for col_idx, colname in enumerate(y.columns):
+    if var_distrib[col_idx] == 'categorical': 
+        y[colname] = le.fit_transform(y[colname])
 
 # No binary data 
 
 enc = OneHotEncoder(sparse = False, drop = 'first')
 labels_oh = enc.fit_transform(np.array(labels).reshape(-1,1)).flatten()
 
-nj, nj_bin, nj_ord = compute_nj(y, var_distrib)
+nj, nj_bin, nj_ord, nj_categ = compute_nj(y, var_distrib)
 y_np = y.values
 nb_cont = np.sum(var_distrib == 'continuous')
 
@@ -112,7 +115,7 @@ maxstep = 100
 
 
 prince_init = dim_reduce_init(y, n_clusters, k, r, nj, var_distrib, seed = None,\
-                              use_famd=False)
+                              use_famd=True)
 m, pred = misc(labels_oh, prince_init['classes'], True) 
 print(m)
 print(confusion_matrix(labels_oh, pred))
@@ -139,10 +142,9 @@ plt.scatter(out["z"][:, 0], out["z"][:, 1], c=pred,\
 
 cb = plt.colorbar()
 cb.ax.get_yaxis().set_ticks([])
-for j, lab in enumerate(['absence','presence']):
+for j, lab in enumerate(['0','1']):
     cb.ax.text(.5, (2 * j + 1) / 4.0, lab, ha='center', va='center', rotation=90)
 cb.ax.get_yaxis().labelpad = 15
-#cb.ax.set_ylabel('# of contacts', rotation=270)
 
 
 #=========================================================================
@@ -194,8 +196,10 @@ eps = 1E-05
 it = 2
 maxstep = 100
 
-prince_init = dim_reduce_init(y, n_clusters, k, r, nj, var_distrib, seed = None)
-out = M1DGMM(y_np, n_clusters, r, k, prince_init, var_distrib, nj, it, eps, maxstep, seed = None)
+prince_init = dim_reduce_init(y, n_clusters, k, r, nj, var_distrib, \
+                              seed = None, use_famd = True)
+out = M1DGMM(y_np, n_clusters, r, k, prince_init, var_distrib, nj, it, eps,\
+             maxstep, seed = None)
 
 r = out['best_r']
 numobs = len(y)
@@ -207,11 +211,12 @@ maxstep = 100
 nb_trials= 30
 m1dgmm_res = pd.DataFrame(columns = ['it_id', 'micro', 'macro', 'silhouette'])
 
-for i in range(22, nb_trials):
+for i in range(nb_trials):
 
     print(i)
     # Prince init
-    prince_init = dim_reduce_init(y, n_clusters, k, r, nj, var_distrib, seed = None)
+    prince_init = dim_reduce_init(y, n_clusters, k, r, nj, var_distrib,\
+                                  seed = None, use_famd = True)
 
     try:
         out = M1DGMM(y_np, n_clusters, r, k, prince_init, var_distrib, nj, it,\
@@ -235,4 +240,4 @@ for i in range(22, nb_trials):
 m1dgmm_res.mean()
 m1dgmm_res.std()
 
-m1dgmm_res.to_csv(res_folder + '/m1dgmm_res.csv')
+m1dgmm_res.to_csv(res_folder + '/m1dgmm_res_famd.csv')

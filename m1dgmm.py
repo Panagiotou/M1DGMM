@@ -30,7 +30,8 @@ from autograd.numpy import newaxis as n_axis
 from gower import gower_matrix
 from sklearn.metrics import silhouette_score
 
-#import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
+
 
 def M1DGMM(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
           eps = 1E-05, maxstep = 100, seed = None, perform_selec = True): 
@@ -171,7 +172,6 @@ def M1DGMM(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
         #=====================================================================
         
         pzl1_ys, ps_y, p_y = E_step_GLLVM(z_s[0], mu_s[0], sigma_s[0], w_s, py_zl1)
-        #del(py_zl1)
 
         #=====================================================================
         # Compute p(z^{(l)}| s, y). Equation (5) of the paper
@@ -187,13 +187,8 @@ def M1DGMM(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
         
         Ez_ys, E_z1z2T_ys, E_z2z2T_ys, EeeT_ys = \
             E_step_DGMM(zl1_ys, H, z_s, zc_s, z2_z1s, pz_ys, pz2_z1s, S)
-        '''  
-        print('E(z1 | y, s) =', np.abs(Ez_ys[0]).mean())
-        print('E(z1z2 | y, s) =',  np.abs(E_z1z2T_ys[0]).mean())
-        print('E(z2z2 | y, s) =',  np.abs(E_z2z2T_ys[0]).mean())
-        print('E(eeT | y, s) =',  np.abs(EeeT_ys[0]).mean()) 
-        '''
-        
+
+
         ###########################################################################
         ############################ M step #######################################
         ###########################################################################
@@ -255,27 +250,14 @@ def M1DGMM(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
             best_sil = deepcopy(new_sil)
             classes = deepcopy(temp_class)
 
+            plt.figure(figsize=(8,8))
+            plt.scatter(z[:, 0], z[:, 1], c = classes)
+            plt.show()
 
         # Refresh the classes only if they provide a better explanation of the data
         if best_lik < new_lik:
             best_lik = deepcopy(prev_lik)
-            
-            #idx_to_sum = tuple(set(range(1, L + 1)) - set([clustering_layer + 1]))
-            #psl_y = ps_y.reshape(numobs, *k, order = 'C').sum(idx_to_sum) 
-
-            #temp_class_l = np.argmax(psl_y, axis = 1)
-            #sil_l = silhouette_score(dm, temp_class_l, metric = 'precomputed')
-            
-            #classes = np.argmax(psl_y, axis = 1) 
-            
-            #z = (ps_y[..., n_axis] * Ez_ys[clustering_layer]).sum(1)
-            
-            '''
-            fig = plt.figure(figsize=(8,8))
-            plt.scatter(z[:, 0], z[:, 1], c = classes)
-            plt.show()
-            '''
-            
+                               
         
         if prev_lik < new_lik:
             patience = 0
@@ -290,7 +272,7 @@ def M1DGMM(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
         is_not_min_specif = not(np.all(np.array(k) == n_clusters) & np.array_equal(r, [2,1]))
         
         if look_for_simpler_network(it_num) & perform_selec & is_not_min_specif:
-            r_to_keep = r_select(y_bin, y_ord, y_categ, zl1_ys, z2_z1s, w_s)
+            r_to_keep = r_select(y_bin, y_ord, y_categ, y_cont, zl1_ys, z2_z1s, w_s)
             
             # If r_l == 0, delete the last l + 1: layers
             new_L = np.sum([len(rl) != 0 for rl in r_to_keep]) - 1 

@@ -27,15 +27,19 @@ from bevel.linear_ordinal_regression import  OrderedLogit
 import autograd.numpy as np
 from autograd.numpy import newaxis as n_axis
 
-from sklearn.preprocessing import StandardScaler
-
-
 ####################################################################################
 ################### MCA GMM + Logistic Regressions initialisation ##################
 ####################################################################################
 
 def add_missing_paths(k, init_paths, init_nb_paths):
-    ''' Add the paths that have been given zeros probabily during init '''
+    ''' Add the paths that have been given zeros probabily during init 
+    k (dict of list): The number of components on each layer of each head and tail
+    init_paths (ndarray): The already existing non-zero probability paths
+    init_nb_paths (list of Bool): takes the value 1 if the path existed 0 otherwise
+    ---------------------------------------------------------------------------------
+    returns (tuple of size 2): The completed lists of paths (ndarray) and the total 
+                                number of paths (1d array)
+    '''
     
     L = len(k)
     all_possible_paths = list(product(*[np.arange(k[l]) for l in range(L)]))
@@ -85,10 +89,6 @@ def get_MFA_params(zl, kl, rl_nextl):
                                proper number of groups:', kl)
    
     
-
-    #gmm = GaussianMixture(n_components = kl)
-    #s = gmm.fit_predict(zl)
-    
     psi = np.full((kl, rl_nextl[0], rl_nextl[0]), 0).astype(float)
     psi_inv = np.full((kl, rl_nextl[0], rl_nextl[0]), 0).astype(float)
     H = np.full((kl, rl_nextl[0], rl_nextl[1]), 0).astype(float)
@@ -120,14 +120,15 @@ def dim_reduce_init(y, n_clusters, k, r, nj, var_distrib, use_famd = False, seed
     the init coefficients in that space
     
     y (numobs x p ndarray): The observations containing categorical variables
+    n_clusters (int): The number of clusters to look for in the data
     k (1d array): The number of components of the latent Gaussian mixture layers
     r (int): The dimension of latent variables
     nj (p 1darray): For binary/count data: The maximum values that the variable can take. 
                     For ordinal data: the number of different existing categories for each variable
     var_distrib (p 1darray): An array containing the types of the variables in y 
-    dim_red_method (str): Choices are 'prince' for MCA, 'umap' of 'tsne'
+    use_famd (Bool): Whether to the famd method (True) or not (False), to initiate the 
+                    first continuous latent variable. Otherwise MCA is used.
     seed (None): The random state seed to use for the dimension reduction
-    M (int): The number of MC points to compute     
     ---------------------------------------------------------------------------------------
     returns (dict): All initialisation parameters
     '''
@@ -156,24 +157,14 @@ def dim_reduce_init(y, n_clusters, k, r, nj, var_distrib, use_famd = False, seed
                                engine='auto', random_state = seed)
         z1 = famd.fit_transform(y).values
             
-        # Encode categorical datas
-        y, var_distrib = gen_categ_as_bin_dataset(y, var_distrib)
-        
-        # Encode binary data
-        le = LabelEncoder()
-        for col_idx, colname in enumerate(y.columns):
-            if var_distrib[col_idx] == 'bernoulli':
-                y[colname] = le.fit_transform(y[colname])
-
     else:
         # Check input = False to remove
         mca = prince.MCA(n_components = r[0], n_iter=3, copy=True,\
                          check_input=False, engine='auto', random_state = seed)
         z1 = mca.fit_transform(y).values
-        #z1 = mca.row_coordinates(y).values.astype(float)
         
     z = [z1]
-    y = y.values#.astype(int)
+    y = y.values
 
     #==============================================================
     # Set the shape parameters of each data type
@@ -185,7 +176,7 @@ def dim_reduce_init(y, n_clusters, k, r, nj, var_distrib, use_famd = False, seed
                               var_distrib == 'binomial')]
     nb_bin = len(nj_bin)
     
-    y_ord = y[:, var_distrib == 'ordinal'].astype(int)    
+    y_ord = y[:, var_distrib == 'ordinal'].astype(float).astype(int)    
     nj_ord = nj[var_distrib == 'ordinal']
     nb_ord = len(nj_ord)
     
