@@ -259,9 +259,9 @@ def miami(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
             best_sil = deepcopy(new_sil)
             classes = deepcopy(temp_class)
 
-            plt.figure(figsize=(8,8))
-            plt.scatter(Ez_y[:, 0], Ez_y[:, 1], c = classes)
-            plt.show()
+            #plt.figure(figsize=(8,8))
+            #plt.scatter(Ez_y[:, 0], Ez_y[:, 1], c = classes)
+            #plt.show()
 
         # Refresh the classes only if they provide a better explanation of the data
         if best_lik < new_lik:

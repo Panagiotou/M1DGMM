@@ -74,10 +74,10 @@ y_categ_non_enc = deepcopy(y)
 vd_categ_non_enc = deepcopy(var_distrib)
 
 # Encode categorical datas
-le = LabelEncoder()
-for col_idx, colname in enumerate(y.columns):
-    if var_distrib[col_idx] == 'categorical': 
-        y[colname] = le.fit_transform(y[colname])
+#le = LabelEncoder()
+#for col_idx, colname in enumerate(y.columns):
+    #if var_distrib[col_idx] == 'categorical': 
+        #y[colname] = le.fit_transform(y[colname])
 
 # Encode binary data
 le = LabelEncoder()
@@ -169,6 +169,7 @@ cb.ax.get_yaxis().labelpad = 15
 
 
 # MIAMI
+import matplotlib .pyplot as plt
 prince_init = dim_reduce_init(y, n_clusters, k, r, nj, var_distrib, seed = None,\
                               use_famd=True)
 out = miami(y_np, n_clusters, r, k, prince_init, var_distrib, nj, it,\
