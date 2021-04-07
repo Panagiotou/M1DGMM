@@ -23,10 +23,12 @@ from sklearn.metrics import silhouette_score
 
 
 from m1dgmm import M1DGMM
+from MIAMI import miami
 from init_params import dim_reduce_init
 from metrics import misc
 from data_preprocessing import gen_categ_as_bin_dataset, \
         compute_nj
+
 
 import autograd.numpy as np
 from autograd.numpy.random import uniform
@@ -112,7 +114,7 @@ y = y.astype(dtype, copy=True)
 # Running the algorithm
 #===========================================# 
 
-r = np.array([2, 1])
+r = np.array([3, 1])
 numobs = len(y)
 k = [n_clusters]
 
@@ -129,6 +131,15 @@ m, pred = misc(labels_oh, prince_init['classes'], True)
 print(m)
 print(confusion_matrix(labels_oh, pred))
 print(silhouette_score(dm, pred, metric = 'precomputed'))
+
+'''
+init = prince_init
+seed = None
+y = y_np
+perform_selec = False
+os.chdir('C:/Users/rfuchs/Documents/GitHub/M1DGMM')
+'''
+
 
 out = M1DGMM(y_np, n_clusters, r, k, prince_init, var_distrib, nj, it,\
              eps, maxstep, seed, perform_selec = False)
@@ -155,6 +166,49 @@ for j, lab in enumerate(['absence','presence']):
     cb.ax.text(.5, (2 * j + 1) / 4.0, lab, ha='center', va='center', rotation=90)
 cb.ax.get_yaxis().labelpad = 15
 #cb.ax.set_ylabel('# of contacts', rotation=270)
+
+
+# MIAMI
+prince_init = dim_reduce_init(y, n_clusters, k, r, nj, var_distrib, seed = None,\
+                              use_famd=True)
+out = miami(y_np, n_clusters, r, k, prince_init, var_distrib, nj, it,\
+             eps, maxstep, seed, perform_selec = False)
+
+
+# Plotting utilities
+varnames = ['age', 'sex', 'chest pain type', 'resting blood pressure',\
+            'serum cholesterol in mg/dl', 'fasting blood sugar > 120 mg/dl',\
+            'resting electrocardiographic results', 'maximum heart rate achieved',\
+            'exercise induced angina', 'ST depression induced by exercise relative to rest',\
+            'the slope of the peak exercise ST segment',\
+            'number of major vessels (0-3)', 'thal']
+
+y_new = out['y'][len(y):]
+
+# Choose the variables number
+var1 = -1
+var2 = 4
+
+
+# Check for 1D distribution
+plt.hist(y_np[:,var1], density = True)
+plt.hist(y_new[:,var1], density = True)
+plt.xlabel(varnames[var1])
+plt.ylabel('Number of observations')
+plt.legend(['Genuine observations', 'Synthetic observations'])
+plt.title('1D projections of genuine and synthetic obervations')
+
+
+
+# Check for 2D distribution
+plt.scatter(y_np[:,var1], y_np[:,var2],  label = 'Genuine observations', s = 1)
+plt.scatter(y_new[:,var1], y_new[:,var2], label = 'Synthetic observations', s = 0.5)
+plt.xlabel(varnames[var1])
+plt.ylabel(varnames[var2])
+plt.legend(['Genuine observations', 'Synthetic observations'])
+plt.title('2D projections of genuine and synthetic obervations')
+
+
 
 
 

@@ -60,6 +60,14 @@ def draw_zl1_ys(z_s, py_zl1, M):
 # E Step functions
 #=============================================================================
 
+'''
+y_bin = y_bin_new
+y_ord = y_ord_new
+y_categ = y_categ_new
+y_cont = y_cont_new
+zl1_s = z_s[0]
+'''
+
 def fy_zl1(lambda_bin, y_bin, nj_bin, lambda_ord, y_ord, nj_ord, lambda_categ,\
            y_categ, nj_categ, y_cont, lambda_cont, zl1_s):
     ''' Compute log p(y | z1) = sum_{s= 1}^S[0] p(y, s| z1) as in Cagnone and 
