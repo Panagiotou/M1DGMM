@@ -168,50 +168,6 @@ cb.ax.get_yaxis().labelpad = 15
 #cb.ax.set_ylabel('# of contacts', rotation=270)
 
 
-# MIAMI
-import matplotlib .pyplot as plt
-prince_init = dim_reduce_init(y, n_clusters, k, r, nj, var_distrib, seed = None,\
-                              use_famd=True)
-out = miami(y_np, n_clusters, r, k, prince_init, var_distrib, nj, it,\
-             eps, maxstep, seed, perform_selec = False)
-
-
-# Plotting utilities
-varnames = ['age', 'sex', 'chest pain type', 'resting blood pressure',\
-            'serum cholesterol in mg/dl', 'fasting blood sugar > 120 mg/dl',\
-            'resting electrocardiographic results', 'maximum heart rate achieved',\
-            'exercise induced angina', 'ST depression induced by exercise relative to rest',\
-            'the slope of the peak exercise ST segment',\
-            'number of major vessels (0-3)', 'thal']
-
-y_new = out['y'][len(y):]
-
-# Choose the variables number
-var1 = -1
-var2 = 4
-
-
-# Check for 1D distribution
-plt.hist(y_np[:,var1], density = True)
-plt.hist(y_new[:,var1], density = True)
-plt.xlabel(varnames[var1])
-plt.ylabel('Number of observations')
-plt.legend(['Genuine observations', 'Synthetic observations'])
-plt.title('1D projections of genuine and synthetic obervations')
-
-
-
-# Check for 2D distribution
-plt.scatter(y_np[:,var1], y_np[:,var2],  label = 'Genuine observations', s = 1)
-plt.scatter(y_new[:,var1], y_new[:,var2], label = 'Synthetic observations', s = 0.5)
-plt.xlabel(varnames[var1])
-plt.ylabel(varnames[var2])
-plt.legend(['Genuine observations', 'Synthetic observations'])
-plt.title('2D projections of genuine and synthetic obervations')
-
-
-
-
 
 #=========================================================================
 # Performance measure : Finding the best specification for init and DDGMM

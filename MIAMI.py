@@ -36,12 +36,8 @@ from sklearn.metrics import silhouette_score
 import matplotlib.pyplot as plt
 
 
-# borderline-SMOTE for imbalanced dataset
-from imblearn.over_sampling import BorderlineSMOTE
-
-
-
-def miami(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
+def miami(y, n_clusters, r, k, init, var_distrib, nj, authorized_ranges,\
+          target_nb_pseudo_obs = 500, it = 50, \
           eps = 1E-05, maxstep = 100, seed = None, perform_selec = True): 
     
     ''' Fit a Generalized Linear Mixture of Latent Variables Model (GLMLVM)
@@ -258,6 +254,7 @@ def miami(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
             Ez_y = (ps_y[..., n_axis] * Ez_ys[clustering_layer]).sum(1)
             best_sil = deepcopy(new_sil)
             classes = deepcopy(temp_class)
+            best_z = deepcopy(z_s[0])
 
             #plt.figure(figsize=(8,8))
             #plt.scatter(Ez_y[:, 0], Ez_y[:, 1], c = classes)
@@ -267,7 +264,6 @@ def miami(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
         if best_lik < new_lik:
             best_lik = deepcopy(prev_lik)
                                
-        
         if prev_lik < new_lik:
             patience = 0
             M = M_growth(it_num + 2, r, numobs)
@@ -382,63 +378,76 @@ def miami(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
     # Data augmentation part
     #=======================================================
                                         
-    # Check out to take the best iteration and not the last as here
+    # Best z_s might be of a wrong dimension after architecture selection:
+    # Have to deal with it in the future.
     
-    # Compute p(z^{(1)})
-    #pzl1 = (pzl1_ys * ps_y[n_axis] * p_y[n_axis]).sum((1,2))
+    # Create pseudo-observations iteratively:
+    nb_pseudo_obs = 0
     
-    # Draw some z^{(1)} | Theta
-    comp_chosen = np.random.choice(S[0], M[0], p=w_s)
-    z = np.zeros((M[0], S[0]))
-    for m in range(M[0]): # Dirty loop for the moment
-        z = z_s[0][:,:,comp_chosen[m]]
+    y_new_all = []
     
+    while nb_pseudo_obs <= target_nb_pseudo_obs:
+        
+        #===================================================
+        # Generate a batch of pseudo-observations
+        #===================================================
+        
+        # Draw some z^{(1)} | Theta
+        comp_chosen = np.random.choice(S[0], M[0], p=w_s)
+        z = np.zeros((M[0], S[0]))
+        for m in range(M[0]): # Dirty loop for the moment
+            z = best_z[:,:,comp_chosen[m]]
+        
+        # Draw the new y
+        y_bin_new = draw_new_bin(lambda_bin, z, nj_bin)
+        y_categ_new = draw_new_categ(lambda_categ, z, nj_categ)
+        y_ord_new = draw_new_ord(lambda_ord, z, nj_ord)
+        y_cont_new = draw_new_cont(lambda_cont, z)
+        
+        # "Destandardize" the continous data
+        y_cont_new = y_cont_new * y_std
+            
+        # Put them in the right order and append them to y
+        type_counter = {'count': 0, 'ordinal': 0,\
+                        'categorical': 0, 'continuous': 0} 
+        
+        y_new = np.full((z.shape[0], y.shape[1]), np.nan)
+        
+        for j, var in enumerate(var_distrib):
+            if (var == 'bernoulli') or (var == 'binomial'):
+                y_new[:, j] = y_bin_new[:, type_counter['count']]
+            elif var == 'ordinal':
+                y_new[:, j] = y_ord_new[:, type_counter[var]]
+                type_counter[var] =  type_counter[var] + 1
+            elif var == 'categorical':
+                y_new[:, j] = y_categ_new[:, type_counter[var]]
+                type_counter[var] =  type_counter[var] + 1
+            elif var == 'continuous':
+                y_new[:, j] = y_cont_new[:, type_counter[var]]
+                type_counter[var] =  type_counter[var] + 1
+            else:
+                raise ValueError(var, 'Type not implemented')
+
+        #===================================================
+        # Acceptation rule
+        #===================================================
+        
+        # Check that each variable is in the good range 
+        y_new_exp = np.expand_dims(y_new, 1)
+        
+        mask = np.logical_and(y_new_exp >= authorized_ranges[0][np.newaxis],\
+                       y_new_exp <= authorized_ranges[1][np.newaxis]) 
+            
+        # Keep an observation if it lies at least into one of the ranges possibility
+        mask = np.any(mask.mean(2) == 1, axis = 1)    
+        
+        y_new = y_new[mask]
+        y_new_all.append(y_new)
+        nb_pseudo_obs = len(np.concatenate(y_new_all))
+        
+    y_new_all = np.concatenate(y_new_all)
     
-    # Draw the new y
-    y_bin_new = draw_new_bin(lambda_bin, z, nj_bin)
-    y_categ_new = draw_new_categ(lambda_categ, z, nj_categ)
-    y_ord_new = draw_new_ord(lambda_ord, z, nj_ord)
-    y_cont_new = draw_new_cont(lambda_cont, z)
-    
-    # "Destandardize" the continous data
-    y_cont_new = y_cont_new * y_std
-    
-    
-    # Compute the p(ynew | z^1)
-    #pz_ynew = (pz_ys[0] * np.expand_dims(ps_y, axis = 1)).sum(2)
-    # Pb because simulate 
-    #py_zl1_new = fy_zl1(lambda_bin, y_bin_new, nj_bin, lambda_ord, y_ord_new, nj_ord, \
-                        #lambda_categ, y_categ_new, nj_categ, y_cont_new, lambda_cont, z_s[0])
-    
-    #pzl1_ynew = pzl1 * py_zl1_new
-    #norm_cste = (pzl1 * py_zl1_new).sum(3)
-    #pzl1_ynew = pzl1_ynew / norm_cste
-    
-    # Resample the ynew according to p(z^1 | ynew)      
-    #y_new
-    
-    # Put them in the right order and append them to y
-    type_counter = {'count': 0, 'ordinal': 0,\
-                    'categorical': 0, 'continuous': 0} 
-    
-    y_new = np.full((z.shape[0], y.shape[1]), np.nan)
-    
-    for j, var in enumerate(var_distrib):
-        if (var == 'bernoulli') or (var == 'binomial'):
-            y_new[:, j] = y_bin_new[:, type_counter['count']]
-        elif var == 'ordinal':
-            y_new[:, j] = y_ord_new[:, type_counter[var]]
-            type_counter[var] =  type_counter[var] + 1
-        elif var == 'categorical':
-            y_new[:, j] = y_categ_new[:, type_counter[var]]
-            type_counter[var] =  type_counter[var] + 1
-        elif var == 'continuous':
-            y_new[:, j] = y_cont_new[:, type_counter[var]]
-            type_counter[var] =  type_counter[var] + 1
-        else:
-            raise ValueError(var, 'Type not implemented')
-    
-    y_all = np.vstack([y, y_new])
+    y_all = np.vstack([y, y_new_all])
     
     out = dict(likelihood = likelihood, y = y_all, classes = classes, Ez_y = Ez_y, \
                best_r = best_r, best_k = best_k)
