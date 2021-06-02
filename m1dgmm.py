@@ -5,7 +5,10 @@ Created on Fri Mar  6 08:52:28 2020
 @author: RobF
 """
 
+
 from copy import deepcopy
+
+from utilities import isnumeric
 
 from numeric_stability import ensure_psd
 from parameter_selection import r_select, k_select 
@@ -33,8 +36,10 @@ from sklearn.metrics import silhouette_score
 import matplotlib.pyplot as plt
 
 
+
 def M1DGMM(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
-          eps = 1E-05, maxstep = 100, seed = None, perform_selec = True): 
+          eps = 1E-05, maxstep = 100, seed = None, perform_selec = True,\
+              dm =  [], max_patience = 1):# dm small hack to remove 
     
     ''' Fit a Generalized Linear Mixture of Latent Variables Model (GLMLVM)
     
@@ -62,12 +67,12 @@ def M1DGMM(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
     best_sil = -1 
     new_sil = -1 
     
-    best_k = deepcopy(k)
-    best_r = deepcopy(r)
+    #best_k = deepcopy(k)
+    #best_r = deepcopy(r)
     
     tol = 0.01
-    max_patience = 1
     patience = 0
+    is_looking_for_better_arch = False
     
     # Initialize the parameters
     eta = deepcopy(init['eta'])
@@ -85,6 +90,7 @@ def M1DGMM(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
     it_num = 0
     ratio = 1000
     np.random.seed = seed
+    out = {} # Store the full output
         
     # Dispatch variables between categories
     y_bin = y[:, np.logical_or(var_distrib == 'bernoulli',var_distrib == 'binomial')]
@@ -117,15 +123,28 @@ def M1DGMM(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
                          ordinal, binomial and bernoulli')
 
     # Compute the Gower matrix
-    cat_features = np.logical_or(var_distrib == 'categorical', var_distrib == 'bernoulli')
-    dm = gower_matrix(y, cat_features = cat_features)
-                
-    while (it_num < it) & ((ratio > eps) | (patience <= max_patience)):
+    if len(dm) == 0:
+        cat_features = np.logical_or(var_distrib == 'categorical', var_distrib == 'bernoulli')
+        dm = gower_matrix(y, cat_features = cat_features)
+    
+               
+    # Do not stop the iterations if there are some iterations left or if the likelihood is increasing
+    # or if we have not reached the maximum patience and if a new architecture was looked for
+    # in the previous iteration
+    while ((it_num < it) & (ratio > eps) & (patience <= max_patience)) | is_looking_for_better_arch:
         print(it_num)
 
         # The clustering layer is the one used to perform the clustering 
         # i.e. the layer l such that k[l] == n_clusters
-        clustering_layer = np.argmax(np.array(k) == n_clusters)
+        
+        if not(isnumeric(n_clusters)):
+            if n_clusters == 'auto':
+                clustering_layer = 0
+            else:
+                raise ValueError('Please enter an int or "auto" for n_clusters')
+        else:
+            assert (np.array(k) == n_clusters).any()
+            clustering_layer = np.argmax(np.array(k) == n_clusters)
 
         #####################################################################################
         ################################# S step ############################################
@@ -233,7 +252,8 @@ def M1DGMM(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
           
         new_lik = np.sum(np.log(p_y))
         likelihood.append(new_lik)
-        ratio = (new_lik - prev_lik)/abs(prev_lik)
+        ratio = abs((new_lik - prev_lik)/prev_lik)
+        #print(ratio)
         print(likelihood)
         
         idx_to_sum = tuple(set(range(1, L + 1)) - set([clustering_layer + 1]))
@@ -253,12 +273,22 @@ def M1DGMM(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
             plt.figure(figsize=(8,8))
             plt.scatter(z[:, 0], z[:, 1], c = classes)
             plt.show()
-
+            
+            # Store the output
+            out['classes'] = deepcopy(classes)
+            out['best_z'] = deepcopy(z_s[0])
+            out['best_k'] = deepcopy(k)
+            out['best_r'] = deepcopy(r)
+            out['best_w_s'] = deepcopy(w_s)
+            out['lambda_bin'] = deepcopy(lambda_bin)
+            out['lambda_ord'] = deepcopy(lambda_ord)
+            out['lambda_categ'] = deepcopy(lambda_categ)
+            out['lambda_cont'] = deepcopy(lambda_cont)
+            
         # Refresh the classes only if they provide a better explanation of the data
         if best_lik < new_lik:
             best_lik = deepcopy(prev_lik)
                                
-        
         if prev_lik < new_lik:
             patience = 0
             M = M_growth(it_num + 2, r, numobs)
@@ -268,16 +298,21 @@ def M1DGMM(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
         ###########################################################################
         ######################## Parameter selection  #############################
         ###########################################################################
+        min_nb_clusters = 2
+       
+        if isnumeric(n_clusters): # To change when add multi mode
+            is_not_min_specif = not(np.all(np.array(k) == n_clusters) & np.array_equal(r, [2,1]))
+        else:
+            is_not_min_specif = not(np.all(np.array(k) == min_nb_clusters) & np.array_equal(r, [2,1]))
         
-        is_not_min_specif = not(np.all(np.array(k) == n_clusters) & np.array_equal(r, [2,1]))
-        
-        if look_for_simpler_network(it_num) & perform_selec & is_not_min_specif:
+        is_looking_for_better_arch = look_for_simpler_network(it_num) & perform_selec & is_not_min_specif
+        if is_looking_for_better_arch:
             r_to_keep = r_select(y_bin, y_ord, y_categ, y_cont, zl1_ys, z2_z1s, w_s)
             
             # If r_l == 0, delete the last l + 1: layers
             new_L = np.sum([len(rl) != 0 for rl in r_to_keep]) - 1 
             
-            k_to_keep = k_select(w_s, k, new_L, clustering_layer)
+            k_to_keep = k_select(w_s, k, new_L, clustering_layer, not(isnumeric(n_clusters)))
     
             is_L_unchanged = (L == new_L)
             is_r_unchanged = np.all([len(r_to_keep[l]) == r[l] for l in range(new_L + 1)])
@@ -338,6 +373,13 @@ def M1DGMM(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
                     w_s = w[new_k_idx_grid].flatten(order = 'C')
     
                 w_s /= w_s.sum()
+                
+                
+                # Refresh the classes: TO RECHECK
+                #idx_to_sum = tuple(set(range(1, L + 1)) - set([clustering_layer + 1]))
+                #ps_y_tmp = ps_y.reshape(numobs, *k, order = 'C').sum(idx_to_sum)
+                #np.argmax(ps_y_tmp[:, k_to_keep[0]], axis = 1)
+
     
                 k = [len(k_to_keep[l]) for l in range(new_L)]
                 r = [len(r_to_keep[l]) for l in range(new_L + 1)]
@@ -346,9 +388,6 @@ def M1DGMM(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
                 S = np.array([np.prod(k_aug[l:]) for l in range(new_L + 1)])    
                 L = new_L
 
-                best_r = deepcopy(r)
-                best_k = deepcopy(k)
-                
                 patience = 0
                 
                 # Identifiability conditions
@@ -357,6 +396,7 @@ def M1DGMM(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
                 eta, H, psi = identifiable_estim_DGMM(eta, H, psi, Ez, AT)
         
                 del(Ez)
+                                                
                          
             print('New architecture:')
             print('k', k)
@@ -367,8 +407,9 @@ def M1DGMM(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
             
         prev_lik = deepcopy(new_lik)
         it_num = it_num + 1
+        
 
-    out = dict(likelihood = likelihood, classes = classes, z = z, \
-               best_r = best_r, best_k = best_k)
+    out['likelihood'] = likelihood
+    
     return(out)
 

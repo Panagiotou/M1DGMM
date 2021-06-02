@@ -6,6 +6,7 @@ Created on Thu Jan 14 16:11:28 2021
 """
 
 from copy import deepcopy
+from utilities import isnumeric
 
 from numeric_stability import ensure_psd
 from parameter_selection import r_select, k_select 
@@ -38,7 +39,7 @@ import matplotlib.pyplot as plt
 
 def miami(y, n_clusters, r, k, init, var_distrib, nj, authorized_ranges,\
           target_nb_pseudo_obs = 500, it = 50, \
-          eps = 1E-05, maxstep = 100, seed = None, perform_selec = True): 
+          eps = 1E-05, maxstep = 100, seed = None, perform_selec = True, dm = None): # dm: Hack to remove
     
     ''' Fit a Generalized Linear Mixture of Latent Variables Model (GLMLVM)
     
@@ -72,6 +73,8 @@ def miami(y, n_clusters, r, k, init, var_distrib, nj, authorized_ranges,\
     tol = 0.01
     max_patience = 1
     patience = 0
+    is_looking_for_better_arch = False
+
     
     # Initialize the parameters
     eta = deepcopy(init['eta'])
@@ -123,14 +126,22 @@ def miami(y, n_clusters, r, k, init, var_distrib, nj, authorized_ranges,\
 
     # Compute the Gower matrix
     cat_features = np.logical_or(var_distrib == 'categorical', var_distrib == 'bernoulli')
-    dm = gower_matrix(y, cat_features = cat_features)
+    dm = gower_matrix(y, cat_features = cat_features) if (dm == None).all() else dm
                 
-    while (it_num < it) & ((ratio > eps) | (patience <= max_patience)):
+    # Do not stop the iterations if there are some iterations left or if the likelihood is increasing
+    # or if we have not reached the maximum patience and if a new architecture was looked for
+    # in the previous iteration
+    while ((it_num < it) & (ratio > eps) & (patience <= max_patience)) | is_looking_for_better_arch:        
         print(it_num)
 
-        # The clustering layer is the one used to perform the clustering 
-        # i.e. the layer l such that k[l] == n_clusters
-        clustering_layer = np.argmax(np.array(k) == n_clusters)
+        if not(isnumeric(n_clusters)):
+            if n_clusters == 'auto':
+                clustering_layer = 0
+            else:
+                raise ValueError('Please enter an int or "auto" for n_clusters')
+        else:
+            assert (np.array(k) == n_clusters).any()
+            clustering_layer = np.argmax(np.array(k) == n_clusters)
 
         #####################################################################################
         ################################# S step ############################################
@@ -238,7 +249,7 @@ def miami(y, n_clusters, r, k, init, var_distrib, nj, authorized_ranges,\
           
         new_lik = np.sum(np.log(p_y))
         likelihood.append(new_lik)
-        ratio = (new_lik - prev_lik)/abs(prev_lik)
+        ratio = abs((new_lik - prev_lik)/prev_lik)
         print(likelihood)
         
         idx_to_sum = tuple(set(range(1, L + 1)) - set([clustering_layer + 1]))
@@ -255,7 +266,9 @@ def miami(y, n_clusters, r, k, init, var_distrib, nj, authorized_ranges,\
             best_sil = deepcopy(new_sil)
             classes = deepcopy(temp_class)
             best_z = deepcopy(z_s[0])
-
+            best_r = deepcopy(r)
+            best_k = deepcopy(k)
+            
             #plt.figure(figsize=(8,8))
             #plt.scatter(Ez_y[:, 0], Ez_y[:, 1], c = classes)
             #plt.show()
@@ -273,16 +286,21 @@ def miami(y, n_clusters, r, k, init, var_distrib, nj, authorized_ranges,\
         ###########################################################################
         ######################## Parameter selection  #############################
         ###########################################################################
-        
-        is_not_min_specif = not(np.all(np.array(k) == n_clusters) & np.array_equal(r, [2,1]))
-        
-        if look_for_simpler_network(it_num) & perform_selec & is_not_min_specif:
+        min_nb_clusters = 2
+       
+        if isnumeric(n_clusters): # To change when add multi mode
+            is_not_min_specif = not(np.all(np.array(k) == n_clusters) & np.array_equal(r, [2,1]))
+        else:
+            is_not_min_specif = not(np.all(np.array(k) == min_nb_clusters) & np.array_equal(r, [2,1]))
+            
+        is_looking_for_better_arch = look_for_simpler_network(it_num) & perform_selec & is_not_min_specif
+        if is_looking_for_better_arch:
             r_to_keep = r_select(y_bin, y_ord, y_categ, y_cont, zl1_ys, z2_z1s, w_s)
             
             # If r_l == 0, delete the last l + 1: layers
             new_L = np.sum([len(rl) != 0 for rl in r_to_keep]) - 1 
             
-            k_to_keep = k_select(w_s, k, new_L, clustering_layer)
+            k_to_keep = k_select(w_s, k, new_L, clustering_layer, not(isnumeric(n_clusters)))
     
             is_L_unchanged = (L == new_L)
             is_r_unchanged = np.all([len(r_to_keep[l]) == r[l] for l in range(new_L + 1)])
@@ -350,9 +368,6 @@ def miami(y, n_clusters, r, k, init, var_distrib, nj, authorized_ranges,\
                 k_aug = k + [1]
                 S = np.array([np.prod(k_aug[l:]) for l in range(new_L + 1)])    
                 L = new_L
-
-                best_r = deepcopy(r)
-                best_k = deepcopy(k)
                 
                 patience = 0
                 
@@ -372,7 +387,7 @@ def miami(y, n_clusters, r, k, init, var_distrib, nj, authorized_ranges,\
             
         prev_lik = deepcopy(new_lik)
         it_num = it_num + 1
-        
+
         
     #=======================================================
     # Data augmentation part
@@ -386,6 +401,9 @@ def miami(y, n_clusters, r, k, init, var_distrib, nj, authorized_ranges,\
     
     y_new_all = []
     
+    w_snorm = np.array(w_s) / np.sum(w_s)
+    
+    total_nb_obs_generated = 0
     while nb_pseudo_obs <= target_nb_pseudo_obs:
         
         #===================================================
@@ -393,7 +411,7 @@ def miami(y, n_clusters, r, k, init, var_distrib, nj, authorized_ranges,\
         #===================================================
         
         # Draw some z^{(1)} | Theta
-        comp_chosen = np.random.choice(S[0], M[0], p=w_s)
+        comp_chosen = np.random.choice(S[0], M[0], p = w_snorm)
         z = np.zeros((M[0], S[0]))
         for m in range(M[0]): # Dirty loop for the moment
             z = best_z[:,:,comp_chosen[m]]
@@ -416,6 +434,7 @@ def miami(y, n_clusters, r, k, init, var_distrib, nj, authorized_ranges,\
         for j, var in enumerate(var_distrib):
             if (var == 'bernoulli') or (var == 'binomial'):
                 y_new[:, j] = y_bin_new[:, type_counter['count']]
+                type_counter['count'] =  type_counter['count'] + 1
             elif var == 'ordinal':
                 y_new[:, j] = y_ord_new[:, type_counter[var]]
                 type_counter[var] =  type_counter[var] + 1
@@ -435,21 +454,27 @@ def miami(y, n_clusters, r, k, init, var_distrib, nj, authorized_ranges,\
         # Check that each variable is in the good range 
         y_new_exp = np.expand_dims(y_new, 1)
         
+        total_nb_obs_generated += len(y_new)
+        
         mask = np.logical_and(y_new_exp >= authorized_ranges[0][np.newaxis],\
                        y_new_exp <= authorized_ranges[1][np.newaxis]) 
             
         # Keep an observation if it lies at least into one of the ranges possibility
-        mask = np.any(mask.mean(2) == 1, axis = 1)    
+        mask = np.any(mask.mean(2) == 1, axis = 1)   
+        #if np.sum(mask) !=0:
+            #print('Add', np.sum(mask))
         
         y_new = y_new[mask]
         y_new_all.append(y_new)
         nb_pseudo_obs = len(np.concatenate(y_new_all))
         
+        
     y_new_all = np.concatenate(y_new_all)
     
     y_all = np.vstack([y, y_new_all])
+    share_kept_pseudo_obs = len(y_new_all) / total_nb_obs_generated
     
     out = dict(likelihood = likelihood, y = y_all, classes = classes, Ez_y = Ez_y, \
-               best_r = best_r, best_k = best_k)
+               best_r = best_r, best_k = best_k, share_kept_pseudo_obs = share_kept_pseudo_obs)
     return(out)
 

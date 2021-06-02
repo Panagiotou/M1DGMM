@@ -44,7 +44,7 @@ def rl1_selection(y_bin, y_ord, y_categ, y_cont, zl1_ys, w_s):
     zero_coef_mask = np.zeros(r0)
     for j in range(nb_bin):
         for s in range(S0):
-            Nj = np.max(y_bin[:,j]) # The support of the jth binomial is [1, Nj]
+            Nj = int(np.max(y_bin[:,j])) # The support of the jth binomial is [1, Nj]
             
             if Nj ==  1:  # If the variable is Bernoulli not binomial
                 yj = y_bin[:,j]
@@ -53,7 +53,7 @@ def rl1_selection(y_bin, y_ord, y_categ, y_cont, zl1_ys, w_s):
                 yj, z = bin_to_bern(Nj, y_bin[:,j], zl1_ys[:,:,:,s])
         
             # Put all the M0 points in a series
-            X = z.flatten(order = 'C').reshape((M0 * numobs, r0), order = 'C')
+            X = z.flatten(order = 'C').reshape((M0 * numobs * Nj, r0), order = 'C')
             y_repeat = np.repeat(yj, M0).astype(int) # Repeat rather than tile to check
             
             lr = LogisticRegression(penalty = 'l1', solver = 'saga')
@@ -195,7 +195,7 @@ def r_select(y_bin, y_ord, y_categ, y_cont, zl1_ys, z2_z1s, w_s):
     other_r_select =  other_r_selection(rl1_select, z2_z1s)
     return [rl1_select] + other_r_select
 
-def k_select(w_s, k, new_L, clustering_layer):
+def k_select(w_s, k, new_L, clustering_layer, mode_auto):
     ''' Automatic choice of the number of components by layer 
     w_s (list): The path probabilities for all s in [1,S]
     k (dict): The number of component on each layer
@@ -204,7 +204,7 @@ def k_select(w_s, k, new_L, clustering_layer):
     --------------------------------------------------------------------------
     returns (dict): The components kept for all the layers of the network
     '''
-    
+                
     L = len(k)
     n_clusters = k[clustering_layer]
     
@@ -215,6 +215,7 @@ def k_select(w_s, k, new_L, clustering_layer):
     
     components_to_keep = []
     w = w_s.reshape(*k, order = 'C')
+    print(w)
             
     for l in range(new_L):
                 
@@ -223,7 +224,7 @@ def k_select(w_s, k, new_L, clustering_layer):
         other_layers_indices = tuple(set(range(L)) - set([l]))
         components_proba = w.sum(other_layers_indices)
         
-        if l == clustering_layer:
+        if (l == clustering_layer) & (mode_auto == False):
             biggest_lik_comp = np.sort(components_proba.argsort()[::-1][:n_clusters])
             components_to_keep.append(biggest_lik_comp)
 

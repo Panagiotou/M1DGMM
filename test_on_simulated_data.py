@@ -9,39 +9,34 @@ import os
 
 os.chdir('C:/Users/rfuchs/Documents/GitHub/M1DGMM')
 
-from copy import deepcopy
-
-from sklearn.metrics import precision_score
-from sklearn.metrics import confusion_matrix
-from sklearn.preprocessing import LabelEncoder 
-from sklearn.preprocessing import OneHotEncoder
-
 import pandas as pd
-
+from copy import deepcopy
 from gower import gower_matrix
-from sklearn.metrics import silhouette_score
+import matplotlib.pyplot as plt
 
+import seaborn as sns 
+from sklearn.cluster import DBSCAN
+from sklearn.preprocessing import LabelEncoder 
+from sklearn.preprocessing import StandardScaler
+from sklearn.cluster import AgglomerativeClustering
 
 from m1dgmm import M1DGMM
-from MIAMI import miami
 from init_params import dim_reduce_init
-from metrics import misc
-from data_preprocessing import gen_categ_as_bin_dataset, \
-        compute_nj
-
 
 import autograd.numpy as np
-from autograd.numpy.random import uniform
 
 
 ###############################################################################
-################   Simulated data    vizualisation      #######################
+#######  Simulated data: Find the right number of clusters   ##################
 ###############################################################################
 
 #===========================================#
 # Importing data
 #===========================================#
 os.chdir('C:/Users/rfuchs/Documents/These/Stats/mixed_dgmm/datasets')
+
+datasets = os.listdir('C:/Users/rfuchs/Documents/These/Stats/mixed_dgmm/datasets/simulated')
+dataset = datasets[-1]
 
 simu1 = pd.read_csv('simulated/result1n500.csv', sep = ';', decimal = ',').iloc[:,1:]
 y = simu1.iloc[:,:-1]
@@ -58,7 +53,7 @@ p = y.shape[1]
 # Formating the data
 #===========================================#
 var_distrib = np.array(['continuous'] * 10 + ['bernoulli'] * 2 + ['binomial'] * 2
-                       + ['categorical'] * 3) 
+                       + ['categorical'] * 3 + ['ordinal'] * 2) 
     
 # Ordinal data already encoded
 y_categ_non_enc = deepcopy(y)
@@ -70,6 +65,11 @@ for col_idx, colname in enumerate(y.columns):
     if var_distrib[col_idx] == 'categorical': 
         y[colname] = le.fit_transform(y[colname])
 
+# Encode ordinal data
+for col_idx, colname in enumerate(y.columns):
+    if var_distrib[col_idx] == 'ordinal': 
+        if y[colname].min() != 0: 
+            y[colname] = y[colname]  - 1 
     
 nj, nj_bin, nj_ord, nj_categ = compute_nj(y, var_distrib)
 y_np = y.values
@@ -93,59 +93,133 @@ dtype = {y.columns[j]: np.float64 if (var_distrib[j] != 'bernoulli') and \
 
 y = y.astype(dtype, copy=True)
 
+nb_trials = 5
+
 #===========================================#
-# Running the algorithm
+# Running the M1DGMM
 #===========================================# 
 
-r = np.array([6, 3])
+# Could loop through the numbers of clusters with which the MDGMM is initialized
+nb_clusters_start = 7
+r = np.array([4, 2])
 numobs = len(y)
-k = [n_clusters]
+k = [nb_clusters_start]
 
 seed = 1
 init_seed = 2
     
 eps = 1E-05
-it = 10
+it = 11 # No architecture changes after this point
 maxstep = 100
 
-prince_init = dim_reduce_init(y, n_clusters, k, r, nj, var_distrib, seed = None,\
-                              use_famd=True)
-m, pred = misc(labels, prince_init['classes'], True) 
-print(m)
-print(confusion_matrix(labels, pred))
-print(silhouette_score(dm, pred, metric = 'precomputed'))
+mdgmm_res = pd.DataFrame(columns = ['it_id', 'micro', 'macro', 'silhouette'])
 
-'''
-init = prince_init
-seed = None
-y = y_np
-perform_selec = False
-os.chdir('C:/Users/rfuchs/Documents/GitHub/M1DGMM')
-'''
+for i in range(nb_trials): 
+    prince_init = dim_reduce_init(y, n_clusters, k, r, nj, var_distrib, seed = None,\
+                                  use_famd=True)
+    
+    out = M1DGMM(y_np, 'auto', r, k, prince_init, var_distrib, nj, it,\
+                 eps, maxstep, seed, perform_selec = True)
+        
+    print(len(set(out['classes'])))
+    print(out['best_k'])
 
+    
+    mdgmm_res = mdgmm_res.append({'it_id': i + 1, 'n_clusters_found': len(set(out['classes']))},\
+                                       ignore_index=True)
+ 
+plt.hist(mdgmm_res['n_clusters_found'])
+plt.axvline(len(set(labels)), label = 'True number of classes', color = 'orange')
+plt.legend(['Number of clusters found', 'True number of classes'])
+plt.title('Number of clusters found in the data')
+plt.xticks(range(nb_clusters_start + 1))
+plt.show()
+    
+#===========================================#
+# Running the hierarchical clustering
+#===========================================# 
 
-out = M1DGMM(y_np, n_clusters, r, k, prince_init, var_distrib, nj, it,\
-             eps, maxstep, seed, perform_selec = False)
-m, pred = misc(labels, out['classes'], True) 
-print(m)
-print(confusion_matrix(labels, pred))
-print(silhouette_score(dm, pred, metric = 'precomputed'))
+hierarch_res = pd.DataFrame(columns = ['linkage', 'dist_threshold', 'n_clusters_found'])
+linkages = ['complete', 'average', 'single']
 
-# Plot the final groups
+for linky in linkages: 
+    for threshold in range(15, 100):
+        aglo = AgglomerativeClustering(n_clusters = None, affinity ='precomputed',\
+                                       linkage = linky, distance_threshold = threshold / 100)
+        
+        aglo_preds = aglo.fit_predict(dm)
 
-import matplotlib
-import matplotlib.pyplot as plt
-import numpy as np
+        hierarch_res = hierarch_res.append({'linkage': linky, \
+                            'dist_threshold': threshold/ 100, 'n_clusters_found':len(set(aglo_preds))},\
+                                           ignore_index=True)
 
-colors = ['green','red', 'blue', 'violet']
+hierarch_res['n_clusters_found'] =  hierarch_res['n_clusters_found'].astype(int)
 
-fig = plt.figure(figsize=(8,8))
-plt.scatter(out["z"][:, 0], out["z"][:, 1], c=pred,\
-            cmap=matplotlib.colors.ListedColormap(colors))
+# Plot the results
+colors = ['#9467bd', '#2ca02c', '#d62728', 'orange', '#1f77b4']
 
+for idx, linky in enumerate(linkages): 
+    plt.plot(hierarch_res[hierarch_res['linkage'] == linky].set_index('dist_threshold')[['n_clusters_found']],\
+             color = colors[idx])
+plt.axhline(len(set(labels)), label = 'True number of classes', color = 'orange', linestyle = 'dashed')
+plt.legend([*['Number of clusters found (' + linky + ')' for linky in linkages] , 'True number of classes'])
+
+plt.yscale('log')
+plt.ylabel('Number of clusters found')
+plt.xlabel('Distance threshold used')
+
+plt.title('Number of clusters found in the data for different threshold distance used')
 plt.show()
 
-fig = plt.figure(figsize=(8,8))
-plt.scatter(out["z"][:, 0], out["z"][:, 1], c=labels,\
-            cmap=matplotlib.colors.ListedColormap(colors))
-plt.show()
+#===========================================#
+# Running the DBSCAN clustering
+#===========================================# 
+
+# Scale the continuous variables
+ss = StandardScaler()
+y_scale = y_nenc_typed.astype(float).values
+y_scale[:, vd_categ_non_enc == 'continuous'] = ss.fit_transform(y_scale[:,\
+                                                                    vd_categ_non_enc == 'continuous'])
+    
+dbs_res = pd.DataFrame(columns = ['it_id', 'data' ,'leaf_size', 'eps',\
+                                  'min_samples', 'n_clusters_found'])
+
+lf_size = np.arange(1,6) * 10
+epss = np.linspace(0.01, 5, 5)
+min_ss = np.arange(1, 5)
+data_to_fit = ['scaled', 'gower']
+
+for lfs in lf_size:
+    print("Leaf size:", lfs)
+    for eps in epss:
+        for min_s in min_ss:
+            for data in data_to_fit:
+                for i in range(nb_trials):
+                    if data == 'gower':
+                        dbs = DBSCAN(eps = eps, min_samples = min_s, \
+                                     metric = 'precomputed', leaf_size = lfs).fit(dm)
+                    else:
+                        dbs = DBSCAN(eps = eps, min_samples = min_s, leaf_size = lfs).fit(y_scale)
+                        
+                    dbs_preds = dbs.labels_                    
+                    dbs_res = dbs_res.append({'it_id': i + 1, 'leaf_size': lfs, \
+                                'eps': eps, 'min_samples': min_s, 'data': data,\
+                                    'n_clusters_found': len(set(dbs_preds))},\
+                                             ignore_index=True)
+
+# scaled data eps = 3.7525 and min_samples = 4  is the best spe
+mean_res = dbs_res.groupby(['data','leaf_size', 'eps', 'min_samples'])['n_clusters_found'].mean()
+maxs = mean_res.max()
+
+
+###############################################################################
+####  Simulated data: Assess the percentage of partition similarity  ##########
+###############################################################################
+
+'''
+For each dataset
+For 30 runs
+Look at the similarity between the partitions
+ARI score ? 
+Look in Selosse
+'''

@@ -141,7 +141,7 @@ os.chdir('C:/Users/rfuchs/Documents/GitHub/M1DGMM')
 '''
 
 
-out = M1DGMM(y_np, n_clusters, r, k, prince_init, var_distrib, nj, it,\
+out = M1DGMM(y_np, 'auto', r, k, prince_init, var_distrib, nj, it,\
              eps, maxstep, seed, perform_selec = False)
 m, pred = misc(labels_oh, out['classes'], True) 
 print(m)

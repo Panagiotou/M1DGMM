@@ -147,3 +147,22 @@ def compute_rho(eta, H, psi, mu_s, sigma_s, z_c, chsi):
                                     + (pinv(sigma_next_l) @ mu_next_l)[n_axis])
                 
     return rho
+
+##########################################################################################################
+################################# General purposes #######################################################
+##########################################################################################################
+   
+def isnumeric(var):
+    ''' Check if a variable is numeric
+    var (int, str, float etc.): The variable whom type has to be tested
+    ---------------------------------------------------------------------------
+    returns (Bool): Whether the variable is of numeric type (True) or not (False)    
+    '''
+    
+    is_num = False
+    try:
+        int(var)
+        is_num = True
+    except:
+        pass
+    return is_num

@@ -255,23 +255,31 @@ def ord_params_GLLVM(y_ord, nj_ord, lambda_ord_old, ps_y, pzl1_ys, zl1_s, AT,\
         
         # Define the constraints such that the threshold coefficients are ordered
         nb_constraints = nj_ord[j] - 2 
-        nb_params = nj_ord[j] + r0 - 1
         
-        lcs = np.full(nb_constraints, -1)
-        lcs = np.diag(lcs, 1)
-        np.fill_diagonal(lcs, 1)
-        
-        lcs = np.hstack([lcs[:nb_constraints, :], \
-                np.zeros([nb_constraints, nb_params - (nb_constraints + 1)])])
-        
-        linear_constraint = LinearConstraint(lcs, np.full(nb_constraints, -np.inf), \
-                            np.full(nb_constraints, 0), keep_feasible = True)
+        if nb_constraints > 0: 
+            nb_params = nj_ord[j] + r0 - 1
+            
+            lcs = np.full(nb_constraints, -1)
+            lcs = np.diag(lcs, 1)
+            np.fill_diagonal(lcs, 1)
+            
+            lcs = np.hstack([lcs[:nb_constraints, :], \
+                    np.zeros([nb_constraints, nb_params - (nb_constraints + 1)])])
+            
+            linear_constraint = LinearConstraint(lcs, np.full(nb_constraints, -np.inf), \
+                                np.full(nb_constraints, 0), keep_feasible = True)
+                    
+            opt = minimize(ord_loglik_j, lambda_ord_old[j] ,\
+                    args = (y_oh, zl1_s, S0, ps_y, pzl1_ys, nj_ord[j]), 
+                    tol = tol, method='trust-constr',  jac = ord_grad_j, \
+                    constraints = linear_constraint, hess = '2-point',\
+                        options = {'maxiter': maxstep})
                 
-        opt = minimize(ord_loglik_j, lambda_ord_old[j] ,\
-                args = (y_oh, zl1_s, S0, ps_y, pzl1_ys, nj_ord[j]), 
-                tol = tol, method='trust-constr',  jac = ord_grad_j, \
-                constraints = linear_constraint, hess = '2-point',\
-                    options = {'maxiter': maxstep})
+        else: # For Nj = 2, only 2 - 1 = 1 intercept coefficient: no constraint
+            opt = minimize(ord_loglik_j, lambda_ord_old[j], \
+                    args = (y_oh, zl1_s, S0, ps_y, pzl1_ys, nj_ord[j]), \
+                           tol = tol, method='BFGS', jac = ord_grad_j, 
+                           options = {'maxiter': maxstep})
         
         res = opt.x
         if not(opt.success): # If the program fail, keep the old estimate as value
@@ -291,7 +299,7 @@ def cont_params_GLLVM(y_cont, lambda_cont_old, ps_y, pzl1_ys, zl1_s, AT,\
                      tol = 1E-5, maxstep = 100):
     ''' Determine the GLLVM coefficients related to binomial coefficients by 
     optimizing each column coefficients separately.
-    y_cont (numobs x nb_bin nd-array): The binomial data
+    y_cont (numobs x nb_cont nd-array): The continuous data
     lambda_cont_old (list of nb_ord_j x (nj_ord + r1) elements): The continuous coefficients
                                                     of the previous iteration
     ps_y ((numobs, S) nd-array): p(s | y) for all s in Omega

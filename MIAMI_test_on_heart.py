@@ -6,7 +6,6 @@ Created on Mon April 29 13:25:11 2020
 """
 
 
-# !!!!! TO DO: Store the best z !
 import os 
 
 os.chdir('C:/Users/rfuchs/Documents/GitHub/M1DGMM')
@@ -21,6 +20,7 @@ from sklearn.preprocessing import OneHotEncoder
 import pandas as pd
 
 from gower import gower_matrix
+import matplotlib .pyplot as plt
 from sklearn.metrics import silhouette_score
 
 
@@ -116,7 +116,8 @@ y = y.astype(dtype, copy=True)
 # Running the algorithm
 #===========================================# 
 
-r = np.array([3, 1])
+nb_pobs = 100 # Target for pseudo observations
+r = np.array([2, 1])
 numobs = len(y)
 k = [n_clusters]
 
@@ -138,16 +139,14 @@ authorized_ranges[0,0] = -10000
 authorized_ranges[1,0] = 10000
 
 
-#authorized_ranges = np.stack([[-10000,10000] for var in var_distrib] ).T
+authorized_ranges = np.stack([[-10000,10000] for var in var_distrib] ).T
 
 
 # MIAMI
-import matplotlib .pyplot as plt
 prince_init = dim_reduce_init(y, n_clusters, k, r, nj, var_distrib, seed = None,\
                               use_famd=True)
-out = miami(y_np, n_clusters, r, k, prince_init, var_distrib, nj, authorized_ranges, it,\
-             eps, maxstep, seed, perform_selec = False)
-
+out = miami(y_np, n_clusters, r, k, prince_init, var_distrib, nj, authorized_ranges, nb_pobs, it,\
+             eps, maxstep, seed, perform_selec = True)
 
 # Plotting utilities
 varnames = ['age', 'sex', 'chest pain type', 'resting blood pressure',\
@@ -171,7 +170,6 @@ plt.xlabel(varnames[var1])
 plt.ylabel('Number of observations')
 plt.legend(['Genuine observations', 'Synthetic observations'])
 plt.title('1D projections of genuine and synthetic obervations')
-
 
 
 # Check for 2D distribution
