@@ -15,14 +15,13 @@ from copy import deepcopy
 from gower import gower_matrix
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import LabelEncoder 
-from sklearn.preprocessing import OneHotEncoder
 
-from MIAMI2 import MIAMI
+from miami import MIAMI
 from init_params import dim_reduce_init
 from data_preprocessing import compute_nj
 
 import autograd.numpy as np
-from table_evaluator import load_data, TableEvaluator
+from table_evaluator import TableEvaluator
 
 ###############################################################################
 ######################         Adult data          ############################
@@ -174,12 +173,14 @@ for design in experiment_designs:
             # Create the intervals for each class
             bins = pd.IntervalIndex.from_tuples([(-0.5, 0.5)] +\
                                 [(1 + i*step, 1 + (i + 1) * step) for i in range(nb_bins)])
+                
             discrete_k = pd.cut(train[col], bins).map(lambda x: x.mid).astype(float)
-            train[col] = le.fit_transform(discrete_k)
-            k_dict[col] = deepcopy(le)
-            
+            print(set(discrete_k))
             test[col] = pd.cut(test[col], bins).map(lambda x: x.mid).astype(float)
-
+            
+            le.fit(test[col])
+            train[col] = le.transform(discrete_k)
+            k_dict[col] = deepcopy(le)
 
         nj, nj_bin, nj_ord, nj_categ = compute_nj(train, var_distrib)
         nb_cont = np.sum(var_distrib == 'continuous')        

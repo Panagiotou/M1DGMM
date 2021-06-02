@@ -5,6 +5,7 @@ Created on Thu May 20 17:34:17 2021
 @author: rfuchs
 """
 
+import re
 import os 
 
 os.chdir('C:/Users/rfuchs/Documents/GitHub/M1DGMM')
@@ -14,16 +15,22 @@ from copy import deepcopy
 from gower import gower_matrix
 import matplotlib.pyplot as plt
 
-import seaborn as sns 
 from sklearn.cluster import DBSCAN
 from sklearn.preprocessing import LabelEncoder 
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import AgglomerativeClustering
 
+from data_preprocessing import compute_nj
+
 from m1dgmm import M1DGMM
 from init_params import dim_reduce_init
 
 import autograd.numpy as np
+
+os.chdir('C:/Users/rfuchs/Documents/These/Stats/mixed_dgmm/datasets')
+datasets = os.listdir('simulated')
+
+nb_trials = 30
 
 
 ###############################################################################
@@ -33,9 +40,7 @@ import autograd.numpy as np
 #===========================================#
 # Importing data
 #===========================================#
-os.chdir('C:/Users/rfuchs/Documents/These/Stats/mixed_dgmm/datasets')
 
-datasets = os.listdir('C:/Users/rfuchs/Documents/These/Stats/mixed_dgmm/datasets/simulated')
 dataset = datasets[-1]
 
 simu1 = pd.read_csv('simulated/result1n500.csv', sep = ';', decimal = ',').iloc[:,1:]
@@ -44,6 +49,8 @@ labels = simu1.iloc[:,-1]
 labels = labels - 1 # Labels starts at 0
 
 y = y.infer_objects()
+y_nenc_typed = deepcopy(y.astype(np.object))
+
 numobs = len(y)
 
 n_clusters = len(np.unique(labels))
@@ -55,9 +62,11 @@ p = y.shape[1]
 var_distrib = np.array(['continuous'] * 10 + ['bernoulli'] * 2 + ['binomial'] * 2
                        + ['categorical'] * 3 + ['ordinal'] * 2) 
     
-# Ordinal data already encoded
-y_categ_non_enc = deepcopy(y)
-vd_categ_non_enc = deepcopy(var_distrib)
+cat_features = np.logical_or(var_distrib == 'categorical',\
+                           var_distrib == 'bernoulli')
+
+# Defining distances over the non encoded features
+dm = gower_matrix(y_nenc_typed, cat_features = cat_features) 
 
 # Encode categorical datas
 le = LabelEncoder()
@@ -77,23 +86,11 @@ nb_cont = np.sum(var_distrib == 'continuous')
 
 p_new = y.shape[1]
 
-
-# Feature category (cf)
-cf_non_enc = np.logical_or(vd_categ_non_enc == 'categorical', vd_categ_non_enc == 'bernoulli')
-
-# Non encoded version of the dataset:
-y_nenc_typed = y_categ_non_enc.astype(np.object)
-y_np_nenc = y_nenc_typed.values
-
-# Defining distances over the non encoded features
-dm = gower_matrix(y_nenc_typed, cat_features = cf_non_enc) 
-
 dtype = {y.columns[j]: np.float64 if (var_distrib[j] != 'bernoulli') and \
         (var_distrib[j] != 'categorical') else np.str for j in range(p_new)}
 
 y = y.astype(dtype, copy=True)
 
-nb_trials = 5
 
 #===========================================#
 # Running the M1DGMM
@@ -139,78 +136,143 @@ plt.show()
 # Running the hierarchical clustering
 #===========================================# 
 
-hierarch_res = pd.DataFrame(columns = ['linkage', 'dist_threshold', 'n_clusters_found'])
+hierarch_res = pd.DataFrame(columns = ['dataset', 'linkage', 'dist_threshold', 'n_clusters_found'])
 linkages = ['complete', 'average', 'single']
 
-for linky in linkages: 
-    for threshold in range(15, 100):
-        aglo = AgglomerativeClustering(n_clusters = None, affinity ='precomputed',\
-                                       linkage = linky, distance_threshold = threshold / 100)
+for dataset in datasets: 
+    
+    #===========================================#
+    # Formating the data
+    #===========================================#
+    
+    simu = pd.read_csv('simulated/' + dataset, sep = ',', decimal = ',').iloc[:,1:]
+    if simu.shape[1] == 0: # The separator is not constant..
+        simu = pd.read_csv('simulated/' + dataset, sep = ';', decimal = ',').iloc[:,1:]
+    
+    y = simu.iloc[:,:-1]    
+    p = y.shape[1]
         
-        aglo_preds = aglo.fit_predict(dm)
+    # Ordinal and continuous are not categorical
+    cat_features = [re.search('y[CO]', col) == None for col in y.columns]
+    dtype = {y.columns[j]: np.str if cat_features[j] else np.float64 for j in range(p)}
+    y = y.astype(dtype, copy=True)
 
-        hierarch_res = hierarch_res.append({'linkage': linky, \
-                            'dist_threshold': threshold/ 100, 'n_clusters_found':len(set(aglo_preds))},\
-                                           ignore_index=True)
+    # Defining distances over the non encoded features
+    dm = gower_matrix(y, cat_features = cat_features) 
+    
+    dist_min = dm.min()
+    dist_max = dm.max()
+    dist_range = np.linspace(0, dist_max, 200)
 
-hierarch_res['n_clusters_found'] =  hierarch_res['n_clusters_found'].astype(int)
-
-# Plot the results
-colors = ['#9467bd', '#2ca02c', '#d62728', 'orange', '#1f77b4']
-
-for idx, linky in enumerate(linkages): 
-    plt.plot(hierarch_res[hierarch_res['linkage'] == linky].set_index('dist_threshold')[['n_clusters_found']],\
-             color = colors[idx])
-plt.axhline(len(set(labels)), label = 'True number of classes', color = 'orange', linestyle = 'dashed')
-plt.legend([*['Number of clusters found (' + linky + ')' for linky in linkages] , 'True number of classes'])
-
-plt.yscale('log')
-plt.ylabel('Number of clusters found')
-plt.xlabel('Distance threshold used')
-
-plt.title('Number of clusters found in the data for different threshold distance used')
-plt.show()
+    for linky in linkages: 
+        for threshold in dist_range:
+            aglo = AgglomerativeClustering(n_clusters = None, affinity ='precomputed',\
+                                           linkage = linky, distance_threshold = threshold)
+            
+            aglo_preds = aglo.fit_predict(dm)
+    
+            hierarch_res = hierarch_res.append({'dataset': dataset, 'linkage': linky, \
+                                'dist_threshold': threshold, 'n_clusters_found':len(set(aglo_preds))},\
+                                               ignore_index=True)
+ 
+hierarch_res.to_csv('C:/Users/rfuchs/Documents/These/Experiences/found_cluster_simus/hierarchical.csv',\
+                    index = False)
 
 #===========================================#
 # Running the DBSCAN clustering
-#===========================================# 
-
-# Scale the continuous variables
-ss = StandardScaler()
-y_scale = y_nenc_typed.astype(float).values
-y_scale[:, vd_categ_non_enc == 'continuous'] = ss.fit_transform(y_scale[:,\
-                                                                    vd_categ_non_enc == 'continuous'])
-    
-dbs_res = pd.DataFrame(columns = ['it_id', 'data' ,'leaf_size', 'eps',\
+#===========================================#
+ 
+dbs_res = pd.DataFrame(columns = ['dataset', 'it_id', 'data' ,'leaf_size', 'eps',\
                                   'min_samples', 'n_clusters_found'])
+        
+for dataset in datasets: 
+    
+    #===========================================#
+    # Formating the data
+    #===========================================#
+    
+    simu = pd.read_csv('simulated/' + dataset, sep = ',', decimal = ',').iloc[:,1:]
+    if simu.shape[1] == 0: # The separator is not constant..
+        simu = pd.read_csv('simulated/' + dataset, sep = ';', decimal = ',').iloc[:,1:]
+    
+    y = simu.iloc[:,:-1]  
+    y_nenc_typed = deepcopy(y.astype(np.object))
 
-lf_size = np.arange(1,6) * 10
-epss = np.linspace(0.01, 5, 5)
-min_ss = np.arange(1, 5)
-data_to_fit = ['scaled', 'gower']
+    p = y.shape[1]
+        
+    # Ordinal and continuous are not categorical
+    cat_features = [re.search('y[CO]', col) == None for col in y.columns]
+    dtype = {y.columns[j]: np.str if cat_features[j] else np.float64 for j in range(p)}
+    y = y.astype(dtype, copy=True)
 
-for lfs in lf_size:
-    print("Leaf size:", lfs)
-    for eps in epss:
-        for min_s in min_ss:
-            for data in data_to_fit:
-                for i in range(nb_trials):
-                    if data == 'gower':
-                        dbs = DBSCAN(eps = eps, min_samples = min_s, \
-                                     metric = 'precomputed', leaf_size = lfs).fit(dm)
-                    else:
-                        dbs = DBSCAN(eps = eps, min_samples = min_s, leaf_size = lfs).fit(y_scale)
-                        
-                    dbs_preds = dbs.labels_                    
-                    dbs_res = dbs_res.append({'it_id': i + 1, 'leaf_size': lfs, \
-                                'eps': eps, 'min_samples': min_s, 'data': data,\
-                                    'n_clusters_found': len(set(dbs_preds))},\
-                                             ignore_index=True)
+    # Defining distances over the non encoded features
+    dm = gower_matrix(y, cat_features = cat_features) 
+
+    # Scale the continuous variables
+    cont_features = [re.search('yC', col) != None for col in y.columns]
+    y_scale = y.values
+    y_scale[:, cont_features] = ss.fit_transform(y_scale[:, cont_features])
+            
+    lf_size = np.arange(1,6) * 10
+    epss = np.linspace(0.01, 5, 5)
+    min_ss = np.arange(1, 5)
+    data_to_fit = ['scaled', 'gower']
+    
+    for lfs in lf_size:
+        print("Leaf size:", lfs)
+        for eps in epss:
+            for min_s in min_ss:
+                for data in data_to_fit:
+                    for i in range(nb_trials):
+                        if data == 'gower':
+                            dbs = DBSCAN(eps = eps, min_samples = min_s, \
+                                         metric = 'precomputed', leaf_size = lfs).fit(dm)
+                        else:
+                            dbs = DBSCAN(eps = eps, min_samples = min_s, leaf_size = lfs).fit(y_scale)
+                            
+                        dbs_preds = dbs.labels_                    
+                        dbs_res = dbs_res.append({'dataset': dataset, 'it_id': i + 1, 'leaf_size': lfs, \
+                                    'eps': eps, 'min_samples': min_s, 'data': data,\
+                                        'n_clusters_found': len(set(dbs_preds))},\
+                                                 ignore_index=True)
 
 # scaled data eps = 3.7525 and min_samples = 4  is the best spe
 mean_res = dbs_res.groupby(['data','leaf_size', 'eps', 'min_samples'])['n_clusters_found'].mean()
 maxs = mean_res.max()
 
+hierarch_res.to_csv('C:/Users/rfuchs/Documents/These/Experiences/found_cluster_simus/dbscan.csv',\
+                    index = False)
+
+###############################################################################
+################################  Result analysis  ############################
+###############################################################################
+
+#===========================================#
+# Hierarchical clustering
+#===========================================# 
+
+hierarch_res = pd.read_csv('C:/Users/rfuchs/Documents/These/Experiences/found_cluster_simus/hierarchical.csv')
+hierarch_res['n_clusters_found'] =  hierarch_res['n_clusters_found'].astype(int)
+
+linkages = ['complete', 'average', 'single']
+colors = ['#9467bd', '#2ca02c', '#d62728', 'orange', '#1f77b4']
+    
+for dataset in datasets: 
+    # Plot the results
+    data = hierarch_res[hierarch_res['dataset'] == dataset]
+    
+    for idx, linky in enumerate(linkages): 
+        plt.plot(data[data['linkage'] == linky].set_index('dist_threshold')[['n_clusters_found']],\
+                 color = colors[idx])
+    plt.axhline(len(set(labels)), label = 'True number of classes', color = 'orange', linestyle = 'dashed')
+    plt.legend([*['Number of clusters found (' + linky + ')' for linky in linkages] , 'True number of classes'])
+    
+    plt.yscale('log')
+    plt.ylabel('Number of clusters found')
+    plt.xlabel('Distance threshold used')
+    
+    plt.title(dataset[5:-4] + 'Number of clusters found in the data for different threshold distance used')
+    plt.show()
 
 ###############################################################################
 ####  Simulated data: Assess the percentage of partition similarity  ##########
