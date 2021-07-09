@@ -23,6 +23,8 @@ from data_preprocessing import compute_nj
 import autograd.numpy as np
 from table_evaluator import TableEvaluator
 
+import seaborn as sns
+
 ###############################################################################
 ######################         Adult data          ############################
 ###############################################################################
@@ -40,7 +42,7 @@ seed = 1
 init_seed = 2
     
 # !!! Changed eps
-eps = 1E-01
+eps = 1E-02
 it = 10
 maxstep = 100
         
@@ -100,7 +102,7 @@ for design in experiment_designs:
     
     for filenum in range(1, nb_files_per_design + 1):
         if design in ['Absent', 'Unbalanced']:
-            train_filepath = 'adult/' + design + '/' + prefix + 'Train' + str(filenum) + '.csv'
+            train_filepath = 'adult/' + design + '/' + prefix + 'Train_' + str(filenum) + '.csv'
         elif design == 'Small':
             train_filepath = 'adult/' + design + '/' + prefix + 'Train_' + str(filenum) + '.csv'
         else:
@@ -168,18 +170,18 @@ for design in experiment_designs:
         for col in ['capital.gain', 'capital.loss']:
             le = LabelEncoder()
 
-            step = np.ceil(test[col].max()) / nb_bins
+            #step = np.ceil(test[col].max()) / nb_bins
             
             # Create the intervals for each class
-            bins = pd.IntervalIndex.from_tuples([(-0.5, 0.5)] +\
-                                [(1 + i*step, 1 + (i + 1) * step) for i in range(nb_bins)])
+            #bins = pd.IntervalIndex.from_tuples([(-0.5, 0.5)] +\
+                                #[(1 + i*step, 1 + (i + 1) * step) for i in range(nb_bins)])
                 
-            discrete_k = pd.cut(train[col], bins).map(lambda x: x.mid).astype(float)
-            print(set(discrete_k))
-            test[col] = pd.cut(test[col], bins).map(lambda x: x.mid).astype(float)
+            #discrete_k = pd.cut(train[col], bins).map(lambda x: x.mid).astype(float)
+            #print(set(discrete_k))
+            #test[col] = pd.cut(test[col], bins).map(lambda x: x.mid).astype(float)
             
-            le.fit(test[col])
-            train[col] = le.transform(discrete_k)
+            le.fit(test[col].append(train[col]))
+            train[col] = le.transform(train[col])
             k_dict[col] = deepcopy(le)
 
         nj, nj_bin, nj_ord, nj_categ = compute_nj(train, var_distrib)
@@ -236,7 +238,15 @@ for design in experiment_designs:
         # Store the predictions
         train_new.to_csv('pseudo_adult/' + design + '/' + 'preds' + str(filenum) + '.csv',\
                          index = False)
-        
+  
+acceptance_rate = pd.DataFrame(acceptance_rate)
+acceptance_rate.to_csv('pseudo_adult/acceptance_rate.csv')
+
+acceptance_rate[['Unbalanced', 'Absent']].astype(float).boxplot()
+plt.title('Acceptance rate of MIAMI in the Absent and Unbalanced designs')
+plt.ylabel('Acceptance rate')
+plt.xlabel('Design')
+
             
 # Visualise the predictions
 # Use table_evaluator    

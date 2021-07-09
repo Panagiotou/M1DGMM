@@ -87,11 +87,13 @@ def MIAMI(y, n_clusters, r, k, init, var_distrib, nj, authorized_ranges,\
         # Generate a batch of pseudo-observations
         #===================================================
         
+        # !!! Can use the draw z_s with mu and sigma..
+        # !!!  Sûr de ce schema de tirage ?
         # Draw some z^{(1)} | Theta
         comp_chosen = np.random.choice(S0, M0, p = w_snorm)
         z = np.zeros((M0, S0))
         for m in range(M0): # Dirty loop for the moment
-            z = best_z[:,:,comp_chosen[m]]
+            z = best_z[:,:,comp_chosen[m]] # !!! Manque un M0 ici...
         
         # Draw the new y
         y_bin_new = draw_new_bin(lambda_bin, z, nj_bin)

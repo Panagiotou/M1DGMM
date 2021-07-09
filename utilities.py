@@ -5,11 +5,19 @@ Created on Wed Mar  4 19:26:07 2020
 @author: Utilisateur
 """
 
+
+import pandas as pd
+import scipy.stats as ss
+from dython.nominal import theils_u, cramers_v
+
 import autograd.numpy as np
 
 from autograd.numpy.linalg import pinv
 from autograd.numpy import newaxis as n_axis
 from autograd.numpy import transpose as t
+
+
+
 
 ##########################################################################################################
 #################################### DGMM Utils ##########################################################
@@ -166,3 +174,33 @@ def isnumeric(var):
     except:
         pass
     return is_num
+
+
+def column_correlations(df, categorical_columns, theil_u=True):
+    """
+    Adapted from the table_generator package
+    Column-wise correlation calculation between ``dataset_a`` and ``dataset_b``.
+    :param dataset_a: First DataFrame
+    :param dataset_b: Second DataFrame
+    :param categorical_columns: The columns containing categorical values
+    :param theil_u: Whether to use Theil's U. If False, use Cramer's V.
+    :return: Mean correlation between all columns.
+    """
+    if categorical_columns is None:
+        categorical_columns = list()
+    elif categorical_columns == 'all':
+        categorical_columns = df.columns
+
+    corr = pd.DataFrame(columns=df.columns, index=['correlation'])
+
+    for column in df.columns.tolist():
+        if column in categorical_columns:
+            if theil_u:
+                corr[column] = theils_u(df[column].sort_values(), df[column].sort_values())
+            else:
+                corr[column] = cramers_v(df[column].sort_values(), df[column].sort_values())
+        else:
+            corr[column], _ = 0.1, ""#ss.pearsonr(df[column].sort_values(), df[column].sort_values())
+    corr.fillna(value=np.nan, inplace=True)
+    correlation = np.mean(corr.values.flatten())
+    return correlation

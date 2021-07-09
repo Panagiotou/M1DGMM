@@ -23,7 +23,6 @@ from sklearn.metrics import silhouette_score
 
 
 from m1dgmm import M1DGMM
-from MIAMI import miami
 from init_params import dim_reduce_init
 from metrics import misc
 from data_preprocessing import gen_categ_as_bin_dataset, \

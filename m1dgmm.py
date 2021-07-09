@@ -105,7 +105,7 @@ def M1DGMM(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
     nj_categ = nj[var_distrib == 'categorical'].astype(int)
     nb_categ = len(nj_categ)    
     
-    y_cont = y[:, var_distrib == 'continuous'] 
+    y_cont = y[:, var_distrib == 'continuous'].astype(float)
     nb_cont = y_cont.shape[1]
     
     # Set y_count standard error to 1
@@ -277,6 +277,7 @@ def M1DGMM(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
             # Store the output
             out['classes'] = deepcopy(classes)
             out['best_z'] = deepcopy(z_s[0])
+            out['Ez.ys'] = z
             out['best_k'] = deepcopy(k)
             out['best_r'] = deepcopy(r)
             out['best_w_s'] = deepcopy(w_s)

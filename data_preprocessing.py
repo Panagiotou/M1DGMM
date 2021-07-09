@@ -77,7 +77,7 @@ def compute_nj(y, var_distrib):
     
     for i in range(len(y.columns)):
         if np.logical_or(var_distrib[i] == 'bernoulli', var_distrib[i] == 'binomial'): 
-            max_nj = np.max(y.iloc[:,i], axis = 0)
+            max_nj = int(np.max(y.iloc[:,i], axis = 0))
             nj.append(max_nj)
             nj_bin.append(max_nj)
         elif var_distrib[i] == 'ordinal':
