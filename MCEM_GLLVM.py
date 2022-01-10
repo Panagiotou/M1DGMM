@@ -60,13 +60,6 @@ def draw_zl1_ys(z_s, py_zl1, M):
 # E Step functions
 #=============================================================================
 
-'''
-y_bin = y_bin_new
-y_ord = y_ord_new
-y_categ = y_categ_new
-y_cont = y_cont_new
-zl1_s = z_s[0]
-'''
 
 def fy_zl1(lambda_bin, y_bin, nj_bin, lambda_ord, y_ord, nj_ord, lambda_categ,\
            y_categ, nj_categ, y_cont, lambda_cont, zl1_s):
@@ -82,6 +75,7 @@ def fy_zl1(lambda_bin, y_bin, nj_bin, lambda_ord, y_ord, nj_ord, lambda_categ,\
     ------------------------------------------------------------------------------
     returns ((M1, numobs, S1) nd-array):log p(y | z1_M)
     '''
+    
     M0 = zl1_s.shape[0]
     S0 = zl1_s.shape[2] 
     numobs = len(y_bin)
@@ -91,7 +85,7 @@ def fy_zl1(lambda_bin, y_bin, nj_bin, lambda_ord, y_ord, nj_ord, lambda_categ,\
     nb_categ = len(nj_categ)
     nb_cont = y_cont.shape[1]
      
-    log_py_zl1 = np.zeros((M0, numobs, S0), dtype = np.float) # l1 standing for the first layer
+    log_py_zl1 = np.zeros((M0, numobs, S0), dtype = float) # l1 standing for the first layer
     
     if nb_bin: # First the Count/Binomial variables
         log_py_zl1 += log_py_zM_bin(lambda_bin, y_bin, zl1_s, S0, nj_bin) 
@@ -250,9 +244,11 @@ def ord_params_GLLVM(y_ord, nj_ord, lambda_ord_old, ps_y, pzl1_ys, zl1_s, AT,\
     new_lambda_ord = []
     
     for j in range(nb_ord):
-        enc = OneHotEncoder(categories='auto')
+        #enc = OneHotEncoder(categories='auto')
+        enc = OneHotEncoder(categories = [list(range(nj_ord[j]))])
+
         y_oh = enc.fit_transform(y_ord[:,j][..., n_axis]).toarray()                
-        
+
         # Define the constraints such that the threshold coefficients are ordered
         nb_constraints = nj_ord[j] - 2 
         

@@ -187,7 +187,8 @@ def dim_reduce_init(y, n_clusters, k, r, nj, var_distrib, use_famd = False, seed
     # Set y_count standard error to 1
     y_cont = y[:, var_distrib == 'continuous'] 
     
-    y_cont = y_cont / np.std(y_cont.astype(np.float), axis = 0, keepdims = True)
+    # Before was np.float
+    y_cont = y_cont / np.std(y_cont.astype(float), axis = 0, keepdims = True)
     nb_cont = y_cont.shape[1]    
 
     #=======================================================

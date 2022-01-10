@@ -25,8 +25,8 @@ from sklearn.metrics import silhouette_score
 from m1dgmm import M1DGMM
 from init_params import dim_reduce_init
 from metrics import misc
-from data_preprocessing import gen_categ_as_bin_dataset, \
-        compute_nj
+from utilities import obs_representation, vars_contributions, density_representation
+from data_preprocessing import compute_nj
 
 
 import autograd.numpy as np
@@ -113,7 +113,7 @@ y = y.astype(dtype, copy=True)
 # Running the algorithm
 #===========================================# 
 
-r = np.array([3, 1])
+r = np.array([2, 1])
 numobs = len(y)
 k = [n_clusters]
 
@@ -147,6 +147,16 @@ print(m)
 print(confusion_matrix(labels_oh, pred))
 print(silhouette_score(dm, pred, metric = 'precomputed'))
 
+# Plot of the latent representation of the observations and contributions of the variables
+y.columns = ['age', 'sex', 'cp' ,'trestbps', 'chol', 'fbs', 'restecg', 'thalach',\
+    'exang', 'oldpeak', 'slope', 'ca', 'thal']
+
+    
+obs_representation(out['classes'], out['Ez.ys'], title = 'Latent representation of the observations')
+vars_contributions(y, out['Ez.ys'], assoc_thr = 0.0)
+density_representation(out, is_3D = False)
+
+
 # Plot the final groups
 
 import matplotlib
@@ -156,7 +166,7 @@ import numpy as np
 colors = ['green','red']
 
 fig = plt.figure(figsize=(8,8))
-plt.scatter(out["z"][:, 0], out["z"][:, 1], c=pred,\
+plt.scatter(out['Ez.ys'][:, 0], out['Ez.ys'][:, 1], c=pred,\
             cmap=matplotlib.colors.ListedColormap(colors))
 
 cb = plt.colorbar()
@@ -169,7 +179,7 @@ cb.ax.get_yaxis().labelpad = 15
 
 
 #=========================================================================
-# Performance measure : Finding the best specification for init and DDGMM
+# Performance measure : Finding the best specification for init and MDGMM
 #=========================================================================
 
 res_folder = 'C:/Users/rfuchs/Documents/These/Experiences/mixed_algos/heart'

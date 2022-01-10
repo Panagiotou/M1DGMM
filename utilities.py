@@ -5,10 +5,15 @@ Created on Wed Mar  4 19:26:07 2020
 @author: Utilisateur
 """
 
-
+import numpy as np
 import pandas as pd
-import scipy.stats as ss
+
+from matplotlib import cm
+import matplotlib.pyplot as plt
+
 from dython.nominal import theils_u, cramers_v
+from dython.nominal import compute_associations
+from scipy.stats import multivariate_normal as Nd
 
 import autograd.numpy as np
 
@@ -204,3 +209,303 @@ def column_correlations(df, categorical_columns, theil_u=True):
     corr.fillna(value=np.nan, inplace=True)
     correlation = np.mean(corr.values.flatten())
     return correlation
+
+# TO DO: Harmonize the code with the last plotting function
+def vars_contributions(df, latent_rpz, assoc_thr = 0.0, \
+                       title = 'Contribution of the variables to the latent dimensions',\
+                       storage_path = None):
+    '''
+    Plot the contribution of the original variables to the latent dimensions
+    constructed by the MDGMM 
+
+    Parameters
+    ----------
+    df : pandas DataFrame
+        The original variables.
+    latent_rpz : pandas DataFrame
+        The latent representation of the observations issued by the MDGMM.
+    assoc_thr : int, optional
+        The minimal association (in absolute value) with the latent 
+        dimensions for a variable to be displayed. 
+        The default is 0.0.
+    title : str, optional
+        The title of the plot to display. The default is 'Latent representation of the observations'.
+    storage : Bool
+        The path to store the plot
+        
+    Returns
+    -------
+    corrs: The associations computed
+    '''
+    
+    latent_dim = latent_rpz.shape[1]
+    if latent_dim > 2:
+        raise NotImplementedError('This function is intended for latent\
+                                  representation of dimension 2 for the moment')
+                                  
+    if isinstance(latent_rpz, pd.DataFrame):
+        latent_rpz.columns = ['Latent dimension 1', 'Latent dimension 2']
+    else:
+        # Format the latent representation into a pandas DataFrame
+        latent_rpz = pd.DataFrame(latent_rpz, columns = ['Latent dimension 1', 'Latent dimension 2']) 
+    
+    # Latent representation of the variables
+    corrs = np.zeros((df.shape[1], latent_rpz.shape[1]))
+    
+    for j1, original_col in enumerate(df.columns):
+        for j2, latent_col in enumerate(latent_rpz.columns):
+            old_new = pd.DataFrame(df[original_col]).join(pd.DataFrame(latent_rpz[latent_col]))
+            assoc = compute_associations(old_new).iloc[1,0]
+            corrs[j1, j2] = assoc
+    
+    
+    # Plot a variable factor map for the first two dimensions.
+    (fig, ax) = plt.subplots(figsize=(8, 8))
+    for i in range(df.shape[1]):
+        
+        if (np.abs(corrs[i]) > assoc_thr).all():
+            ax.arrow(0,
+                     0,  # Start the arrow at the origin
+                     corrs[i, 0],  #0 for PC1
+                     corrs[i, 1],  #1 for PC2
+                     head_width=0.1,
+                     head_length=0.1)
+        
+            plt.text(corrs[i, 0] + 0.05,
+                     corrs[i, 1] + 0.05,
+                     s = df.columns.values[i])
+    
+    
+    an = np.linspace(0, 2 * np.pi, 300)
+    plt.plot(np.cos(an), np.sin(an))  # Add a unit circle for scale
+    plt.axis('equal')
+    plt.xlabel('Latent dimension 1', fontsize = 16)
+    plt.ylabel('Latent dimension 2', fontsize = 16)
+    ax.set_title(title)
+    
+    if storage_path:
+        plt.savefig(storage_path)
+        
+    plt.show()
+
+    return corrs
+
+# Create a plotting utility file
+def obs_representation(obs_classes, latent_rpz, title = 'Latent representation of the observations',
+                       storage_path = None):
+    '''
+    Plot the observations in the latent space
+
+    Parameters
+    ----------
+    obs_classes : numpy array or pandas DataFrame
+        The classes of each observations determined by the MDGMM.
+    latent_rpz : numpy array 
+        The latent representation of the observations issued by the MDGMM.
+    title : str, optional
+        The title of the plot to display. The default is 'Latent representation of the observations'.
+    storage : Bool
+        The path to store the plot
+        
+    Returns
+    -------
+    None. The plot of the observations in the latent space
+    '''
+    
+    latent_dim = latent_rpz.shape[1]
+
+    if latent_dim > 2:
+        raise NotImplementedError('This function is intended for latent\
+                                  representation of dimension 2 for the moment')
+        
+    if isinstance(latent_rpz, pd.DataFrame):
+        latent_rpz.columns = ['Latent dimension 1', 'Latent dimension 2']
+    else:
+        # Format the latent representation into a pandas DataFrame
+        latent_rpz = pd.DataFrame(latent_rpz, columns = ['Latent dimension 1', 'Latent dimension 2']) 
+    
+    classes = list(set(obs_classes))
+    classes.sort()
+
+    fig = plt.figure(figsize=(8,8))
+
+    for cluster_idx in classes:
+        cluster_data = latent_rpz.loc[obs_classes == cluster_idx]
+        plt.scatter(cluster_data['Latent dimension 1'], cluster_data['Latent dimension 2'],\
+                    label = cluster_idx)
+        
+    plt.xlabel('Latent dimension 1', fontsize = 16)
+    plt.ylabel('Latent dimension 2', fontsize = 16)
+    plt.title(title)
+
+    
+    plt.tight_layout()
+    plt.legend()
+    if storage_path:
+        plt.savefig(storage_path)
+        
+    plt.show()
+    
+def cluster_belonging_conf(out, latent_rpz, title = 'Cluster belonging probability',
+                       storage_path = None):
+    '''
+    Plot the observations in the latent space
+
+    Parameters
+    ----------
+    obs_classes : numpy array or pandas DataFrame
+        The classes of each observations determined by the MDGMM.
+    latent_rpz : numpy array 
+        The latent representation of the observations issued by the MDGMM.
+    title : str, optional
+        The title of the plot to display. The default is 'Latent representation of the observations'.
+    storage : Bool
+        The path to store the plot
+        
+    Returns
+    -------
+    None. The plot of the observations in the latent space
+    '''
+    
+    numobs = len(out['classes'])
+    latent_dim = latent_rpz.shape[1]
+
+    if latent_dim > 2:
+        raise NotImplementedError('This function is intended for latent\
+                                  representation of dimension 2 for the moment')
+        
+    if isinstance(latent_rpz, pd.DataFrame):
+        latent_rpz.columns = ['Latent dimension 1', 'Latent dimension 2']
+    else:
+        # Format the latent representation into a pandas DataFrame
+        latent_rpz = pd.DataFrame(latent_rpz, columns = ['Latent dimension 1', 'Latent dimension 2']) 
+    
+
+    fig = plt.figure(figsize=(8,8))
+
+    ss = plt.scatter(latent_rpz['Latent dimension 1'], latent_rpz['Latent dimension 2'],\
+                c = out['psl_y'].max(1),  cmap = cm.viridis)
+    plt.colorbar(ss)
+        
+    plt.xlabel('Latent dimension 1', fontsize = 16)
+    plt.ylabel('Latent dimension 2', fontsize = 16)
+    plt.title(title)
+
+    for obs_idx in range(numobs):
+        plt.annotate(str(out['classes'][obs_idx]), (latent_rpz.iloc[obs_idx, 0],\
+                                              latent_rpz.iloc[obs_idx, 1]))
+    
+    plt.tight_layout()
+    #plt.legend()
+    if storage_path:
+        plt.savefig(storage_path)
+        
+    plt.show()
+
+    
+def mixtureDensity(x, y, w, mu, Sigma):
+    '''
+    Compute the density of a Gaussian Mixture model
+
+    Parameters
+    ----------
+    x : numpy 2D array
+        A meshgrid - first coordinate - on which to evaluate the density.
+    y : numpy 2D array
+        A meshgrid - second coordinate - on which to evaluate the density.
+    w : numpy 1D array
+        The proportion of the different components of the mixture.
+    mu : numpy array
+        The means of each component.
+    Sigma : numpy array
+        The covariance of each component.
+    Returns
+    -------
+    z : np.array
+        The density evaluated on the (x, y) grid.
+    '''
+    
+    K = mu.shape[0]
+    pos=np.empty(x.shape + (2,))# if  x.shape is (m,n) then  pos.shape is (m,n,2)
+    pos[:, :, 0] = x; pos[:, :, 1] = y 
+    z=np.zeros(x.shape)
+    for k in range(K):
+        z=z+w[k]*Nd.pdf(pos, mean=mu[k,:], cov=Sigma[k,:, :])
+    return z
+    
+
+def density_representation(out, is_3D = False, storage_path = None):
+    '''
+    Plot the density of the DGMM distribution estimated in the latent space
+
+    Parameters
+    ----------
+    out : dict
+        The MDGMM output
+    is_3D : Bool, optional
+        Whether to plot a 3D (alternative: 2D density). The default is False.
+    storage : Bool
+        The path to store the plot
+        
+    Returns
+    -------
+    None. The density plot
+
+    '''
+    NBPOINTS = 1000
+    
+    #================================================
+    # Fetching the Gaussian moments and observations
+    #================================================
+
+    Sigma = out['sigma'][0]
+    means = out['mu'][0][:,:,0]
+    w = out['best_w_s']
+    xmin, ymin = out['Ez.ys'].min(0) * 0.9
+    xmax, ymax = out['Ez.ys'].max(0) * 1.1
+    
+    #================================================
+    # Simulate according to the mixture density
+    #================================================
+
+    xx=np.linspace(xmin, xmax, NBPOINTS)
+    yy=np.linspace(ymin, ymax, NBPOINTS)
+    x,y=np.meshgrid(xx,yy)
+    z=mixtureDensity(x, y, w,  means, Sigma)
+    
+    #================================================
+    # Plotting the density
+    #================================================
+    
+    fig=plt.figure(figsize=(8,8))
+
+    if is_3D == True:
+        ax = fig.add_subplot(111, projection='3d')
+        ax.view_init(elev=35, azim=-90)
+        ax.plot_surface(x, y, z, rstride=1, cstride=1, cmap=cm.RdBu,
+            linewidth=0, antialiased=False)
+    else:
+        ax = fig.gca()
+        
+        ax.contourf(xx, yy, z, cmap='coolwarm')
+        ax.imshow(np.rot90(z), cmap='coolwarm', extent=[xmin, xmax, ymin, ymax])
+        cset = ax.contour(xx, yy, z, colors='k')
+        ax.clabel(cset, inline=1, fontsize=10)
+        
+    
+    ax.set_xlabel('Latent dimension 1', fontsize = 16) 
+    ax.set_ylabel('Latent dimension 2', fontsize = 16)
+    ax.set_xlim(xmin, xmax)
+    ax.set_ylim(ymin, ymax)
+    plt.title('Latent dimensions density')
+
+    plt.tight_layout()
+
+    if storage_path:
+        plt.savefig(storage_path)
+        
+    plt.show()
+    
+#============================================
+# Data processing
+#=============================================

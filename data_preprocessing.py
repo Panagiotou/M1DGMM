@@ -7,6 +7,7 @@ Created on Mon Jun  8 09:15:20 2020
 
 from copy import deepcopy
 from sklearn.preprocessing import OneHotEncoder
+from sklearn.preprocessing import LabelEncoder 
 
 import pandas as pd
 
@@ -121,4 +122,40 @@ def bin_to_bern(Nj, yj_binom, zM_binom):
     yk_bern = (u > p).astype(int).flatten('A')#[..., n_axis] 
         
     return yk_bern, np.repeat(zM_binom, Nj, 0)
+
+def data_processing(y, var_distrib):
+    dtypes_dict = {'continuous': float, 'categorical': str, 'ordinal': float,\
+                  'bernoulli': int, 'binomial': int}
+    
+    df = deepcopy(y)
+    #===========================================#
+    # Formating the data
+    #===========================================#
+                            
+    # Encode categorical datas
+    le = LabelEncoder()
+    for col_idx, colname in enumerate(df.columns):
+        if var_distrib[col_idx] == 'categorical': 
+            df[colname] = le.fit_transform(df[colname])
+
+    # Encode binary data
+    le = LabelEncoder()
+    for col_idx, colname in enumerate(df.columns):
+        if var_distrib[col_idx] == 'bernoulli': 
+            df[colname] = le.fit_transform(df[colname])
+            
+    # Encode ordinal data
+    le = LabelEncoder()
+    for col_idx, colname in enumerate(df.columns):
+        if var_distrib[col_idx] == 'ordinal': 
+            df[colname] = le.fit_transform(df[colname])
+        
+    nj, nj_bin, nj_ord, nj_categ = compute_nj(df, var_distrib)
+    p_new = df.shape[1]
+
+    # Feature category (cf)
+    dtype = {df.columns[j]: dtypes_dict[var_distrib[j]] for j in range(p_new)}
+    df = df.astype(dtype)
+    
+    return df
 

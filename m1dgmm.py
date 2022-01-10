@@ -39,7 +39,7 @@ import matplotlib.pyplot as plt
 
 def M1DGMM(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
           eps = 1E-05, maxstep = 100, seed = None, perform_selec = True,\
-              dm =  [], max_patience = 1):# dm small hack to remove 
+              dm =  [], max_patience = 1, use_silhouette = True):# dm small hack to remove 
     
     ''' Fit a Generalized Linear Mixture of Latent Variables Model (GLMLVM)
     
@@ -56,6 +56,8 @@ def M1DGMM(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
     maxstep (int): The maximum number of optimisation step for each variable
     seed (int): The random state seed to set (Only for numpy generated data for the moment)
     perform_selec (Bool): Whether to perform architecture selection or not
+    use_silhouette (Bool): If True use the silhouette as quality criterion (best for clustering) else use
+                            the likelihood (best for data augmentation).
     ------------------------------------------------------------------------------------------------
     returns (dict): The predicted classes, the likelihood through the EM steps
                     and a continuous representation of the data
@@ -66,10 +68,7 @@ def M1DGMM(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
     
     best_sil = -1 
     new_sil = -1 
-    
-    #best_k = deepcopy(k)
-    #best_r = deepcopy(r)
-    
+        
     tol = 0.01
     patience = 0
     is_looking_for_better_arch = False
@@ -87,6 +86,7 @@ def M1DGMM(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
    
     numobs = len(y)
     likelihood = []
+    silhouette = []
     it_num = 0
     ratio = 1000
     np.random.seed = seed
@@ -252,9 +252,8 @@ def M1DGMM(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
           
         new_lik = np.sum(np.log(p_y))
         likelihood.append(new_lik)
+        silhouette.append(new_sil)
         ratio = abs((new_lik - prev_lik)/prev_lik)
-        #print(ratio)
-        print(likelihood)
         
         idx_to_sum = tuple(set(range(1, L + 1)) - set([clustering_layer + 1]))
         psl_y = ps_y.reshape(numobs, *k, order = 'C').sum(idx_to_sum) 
@@ -264,27 +263,39 @@ def M1DGMM(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
             new_sil = silhouette_score(dm, temp_class, metric = 'precomputed')
         except ValueError:
             new_sil = -1
+           
+        # Store the params according to the silhouette or likelihood
+        is_better = (best_sil < new_sil) if use_silhouette else (best_lik < new_lik)
             
-        if best_sil < new_sil:
+        if is_better:
             z = (ps_y[..., n_axis] * Ez_ys[clustering_layer]).sum(1)
             best_sil = deepcopy(new_sil)
             classes = deepcopy(temp_class)
-
+            '''
             plt.figure(figsize=(8,8))
             plt.scatter(z[:, 0], z[:, 1], c = classes)
             plt.show()
+            '''
             
             # Store the output
             out['classes'] = deepcopy(classes)
             out['best_z'] = deepcopy(z_s[0])
-            out['Ez.ys'] = z
+            out['Ez.y'] = z
             out['best_k'] = deepcopy(k)
             out['best_r'] = deepcopy(r)
+            
             out['best_w_s'] = deepcopy(w_s)
             out['lambda_bin'] = deepcopy(lambda_bin)
             out['lambda_ord'] = deepcopy(lambda_ord)
             out['lambda_categ'] = deepcopy(lambda_categ)
             out['lambda_cont'] = deepcopy(lambda_cont)
+            
+            out['mu'] = deepcopy(mu_s)
+            out['sigma'] = deepcopy(sigma_s)
+            
+            out['psl_y'] = deepcopy(psl_y)
+            out['ps_y'] = deepcopy(ps_y)
+
             
         # Refresh the classes only if they provide a better explanation of the data
         if best_lik < new_lik:
@@ -408,9 +419,12 @@ def M1DGMM(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
             
         prev_lik = deepcopy(new_lik)
         it_num = it_num + 1
+        print(likelihood)
+        print(silhouette)
         
 
     out['likelihood'] = likelihood
+    out['silhouette'] = silhouette
     
     return(out)
 

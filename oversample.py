@@ -6,17 +6,19 @@ Created on Thu Jan 14 16:55:47 2021
 """
 
 import autograd.numpy as np
-from autograd.numpy import newaxis as n_axis
-from autograd.numpy import transpose as t
+from scipy.stats import mode 
+from gower import gower_matrix
+
 from scipy.special import binom
+from scipy.optimize import minimize
+from autograd.numpy import transpose as t
+from autograd.numpy import newaxis as n_axis
 from sklearn.preprocessing import OneHotEncoder
 from numeric_stability import log_1plusexp, expit, softmax_
 
-
-
 '''
 lambda_bin = lambda_bin
-z_new = z_
+z_new = z
 
 '''
 
@@ -48,7 +50,7 @@ def draw_new_bin(lambda_bin, z_new, nj_bin):
         
         # Draw the observations
         u = np.random.uniform(size = (new_nb_obs, nj_bin[j])) # To check: work for binomials
-        y_bin_new[:,j] = (u > pi).sum(1)          
+        y_bin_new[:,j] = (pi > u).sum(1)          
         
     return y_bin_new
 
@@ -79,8 +81,8 @@ def draw_new_categ(lambda_categ, z_new, nj_categ):
 
         # Compute the probability
         eta = zM_broad @ lambda_categ_j_[:, 1:][n_axis,..., n_axis] # Check que l'on fait r et pas k ?
-        eta = eta + lambda_categ_j_[:,0].reshape(1, nj_categ[j], 1, 1) # Add the constant
-        pi = softmax_(eta.astype(np.float), axis = 1) 
+        eta = eta + lambda_categ_j_[:,0].reshape(1, nj_categ[j], 1, 1, order = 'C')  # Add the constant
+        pi = softmax_(eta.astype(float), axis = 1) 
         
         # Numeric stability
         pi = np.where(pi <= 0, epsilon, pi)
@@ -89,7 +91,7 @@ def draw_new_categ(lambda_categ, z_new, nj_categ):
         # Draw the observations
         pi = pi[:,:,0,0]
         cumsum_pi = np.cumsum(pi, axis = 1)
-        u = np.random.uniform(size = (new_nb_obs, 1)) # To check: work for binomials
+        u = np.random.uniform(size = (new_nb_obs, 1)) 
         y_categ_new[:,j] = (cumsum_pi > u).argmax(1)  
 
     return y_categ_new
@@ -106,7 +108,6 @@ def draw_new_ord(lambda_ord, z_new, nj_ord):
     returns (ndarray): The p(y_j | zM, s1 = k1) for the jth ordinal variable
     '''    
     r = z_new.shape[1]
-    epsilon = 1E-10 # Numeric stability
     nb_ord = len(nj_ord)
     new_nb_obs = z_new.shape[0]
 
@@ -120,13 +121,13 @@ def draw_new_ord(lambda_ord, z_new, nj_ord):
         broad_lambda0 = lambda0.reshape((1, nj_ord[j] - 1))
         eta = broad_lambda0 - (z_new @ Lambda.reshape((r, 1)))
         
-            
         gamma = expit(eta)
-        gamma_prev = np.concatenate([np.zeros((new_nb_obs, 1)), gamma], axis = 1)
+        #gamma = np.concatenate([np.zeros((new_nb_obs, 1)), gamma], axis = 1)
+        gamma = np.concatenate([gamma, np.ones((new_nb_obs, 1))], axis = 1)
         
         # Draw the observations
-        u = np.random.uniform(size = (new_nb_obs, 1)) # To check: work for binomials
-        y_ord_new[:,j] = (gamma_prev > u).argmax(1)  
+        u = np.random.uniform(size = (new_nb_obs, 1)) 
+        y_ord_new[:,j] = (gamma > u).argmax(1)  
            
     return y_ord_new
 
@@ -149,12 +150,336 @@ def draw_new_cont(lambda_cont, z_new):
     y_cont_new = np.full((new_nb_obs, nb_cont), np.nan)
     
     for j in range(nb_cont):
+
         eta = z_new @ lambda_cont[j][1:].reshape(r, 1)
         eta = eta + lambda_cont[j][0].reshape(1, 1) # Add the constant
         
         y_cont_new[:,j] = np.random.multivariate_normal(mean = eta.flatten(),\
-                                                    cov = np.eye(new_nb_obs))
+                                                    cov = np.eye(new_nb_obs).astype(float))
         
     return y_cont_new
 
 
+#========================================================
+# Pi per variable (beta)
+#========================================================
+
+def stat_cont(lambda_cont, z_new):
+    r = z_new.shape[1]
+    nb_cont = lambda_cont.shape[0]
+    
+    #eta = np.full((nb_cont), np.nan)
+    eta = []
+    
+    for j in range(nb_cont):
+
+        eta_j = z_new @ lambda_cont[j][1:].reshape(r, 1)
+        eta_j = eta_j + lambda_cont[j][0].reshape(1, 1) # Add the constant
+        
+        eta.append(eta_j[0][0])
+        
+    eta = np.array(eta)
+        
+    return eta
+
+def stat_bin(lambda_bin, z_new, nj_bin):
+    
+    nb_bin = len(nj_bin)    
+    pi = []
+    #pi = np.full((nb_bin), np.nan)
+
+    for j in range(nb_bin):
+    
+        # Compute the probability
+        eta = z_new @ lambda_bin[j][1:][..., n_axis]
+        eta = eta + lambda_bin[j][0].reshape(1, 1) # Add the constant
+        
+        pi.append(expit(eta)[0][0])
+        #pi[j] = expit(eta)[0][0]
+    pi = np.array(pi)
+    
+    return pi * nj_bin # Return the mean
+
+
+def stat_categ(lambda_categ, z_new, nj_categ):
+    #epsilon = 1E-10
+    nb_categ = len(nj_categ)
+    r = z_new.shape[1] 
+    
+    pi = []
+  
+    for j in range(nb_categ):
+        
+        zM_broad = np.expand_dims(np.expand_dims(z_new, 1), 2)
+        lambda_categ_j_ = lambda_categ[j].reshape(nj_categ[j], r + 1, order = 'C')
+
+        # Compute the probability
+        eta = zM_broad @ lambda_categ_j_[:, 1:][n_axis,..., n_axis] # Check que l'on fait r et pas k ?
+        eta = eta + lambda_categ_j_[:,0].reshape(1, nj_categ[j], 1, 1, order = 'C')  # Add the constant
+        pi.append(softmax_(eta.astype(float), axis = 1)[0,:,0,0]) 
+        
+    return pi
+
+def stat_ord(lambda_ord, z_new, nj_ord):
+
+    r = z_new.shape[1]
+    nb_ord = len(nj_ord)
+    new_nb_obs = z_new.shape[0]
+
+    gamma = []
+
+    for j in range(nb_ord):
+        
+        lambda0 = lambda_ord[j][:(nj_ord[j] - 1)]
+        Lambda = lambda_ord[j][-r:]
+
+        broad_lambda0 = lambda0.reshape((1, nj_ord[j] - 1))
+        eta = broad_lambda0 - (z_new @ Lambda.reshape((r, 1)))
+        
+        gamma_j = expit(eta)
+
+        gamma_j = np.concatenate([np.zeros((new_nb_obs, 1)), gamma_j], axis = 1)
+        gamma_j = np.concatenate([gamma_j, np.ones((new_nb_obs, 1))], axis = 1)[0]
+
+        gamma.append(gamma_j)
+        
+
+    return gamma
+
+
+def stat_all(z, target, var_distrib, weights, lambda_bin, nj_bin, lambda_categ, nj_categ,\
+             lambda_ord, nj_ord, lambda_cont, y_std):
+     
+    # Prevent the shape changes caused by the scipy minimize function
+    if len(z.shape) == 1: z = z[n_axis]
+    
+    #=================================
+    # Binary and count variables
+    #=================================
+
+    is_count = np.logical_or(var_distrib == 'binomial', var_distrib == 'bernoulli')
+    count_weights = weights[is_count]   
+    
+    count = stat_bin(lambda_bin, z, nj_bin) 
+    norm =  np.where(target[is_count] > 0, target[is_count], 1) 
+    count_dist = ((count - target[is_count]) / norm) ** 2
+    count_dist = np.sum(count_dist * count_weights)
+    
+    #=================================
+    # Continuous variables
+    #=================================
+
+    cont_weights = weights[var_distrib == 'continuous']
+    
+    cont = stat_cont(lambda_cont, z)
+    mean_cont = cont * y_std
+    norm = np.where(target[var_distrib == 'continuous'] > 0,\
+                     target[var_distrib == 'continuous'], 1) 
+    cont_dist = ((mean_cont - target[var_distrib == 'continuous'])\
+                        / norm) ** 2
+    cont_dist = np.sum(cont_dist * cont_weights)
+
+    #=================================
+    # Categorical variables
+    #=================================
+
+    categ_weights = weights[var_distrib == 'categorical']
+    
+    nb_categ = len(nj_categ)
+    categ = stat_categ(lambda_categ, z, nj_categ) 
+
+    categ_dist = []
+    for j in range(nb_categ):
+        true_idx = int(target[var_distrib == 'categorical'][j]) 
+        categ_dist.append((1 - categ[j][true_idx]) ** 2)
+
+    categ_dist = np.sum(categ_dist * categ_weights)
+
+    #=================================
+    # Ordinal variables
+    #=================================
+
+    ord_weights = weights[var_distrib == 'ordinal']
+
+    nb_ord = len(nj_ord)
+    ord_ = stat_ord(lambda_ord, z, nj_ord) 
+    
+    ord_dist = []
+    for j in range(nb_ord):
+        true_idx = int(target[var_distrib == 'ordinal'][j])
+        ord_dist.append((1 - (ord_[j][true_idx + 1] - ord_[j][true_idx]) ** 2))
+    
+    ord_dist = np.sum(ord_dist * ord_weights)
+
+    return count_dist + categ_dist + ord_dist + cont_dist 
+    
+def impute(z, var_distrib, lambda_bin, nj_bin, lambda_categ, nj_categ,\
+             lambda_ord, nj_ord, lambda_cont, y_std):
+    
+    y_bin_new = stat_bin(lambda_bin, z, nj_bin).round(0) 
+    
+    y_categ_all = stat_categ(lambda_categ, z[n_axis], nj_categ)
+    y_categ_new = [yi.argmax() for yi in y_categ_all]
+    
+    y_ord_all = stat_ord(lambda_ord, z[n_axis], nj_ord)
+    y_ord_new = [np.diff(yi).argmax() for yi in y_ord_all]
+    
+    y_cont_new = (stat_cont(lambda_cont, z[n_axis]) * y_std)[0]
+       
+    # Put them in the right order and append them to y
+    type_counter = {'count': 0, 'ordinal': 0,\
+                    'categorical': 0, 'continuous': 0} 
+    
+    y_new = np.full((var_distrib.shape[0]), np.nan)
+    
+    # Quite dirty:
+    for j, var in enumerate(var_distrib):
+        if (var == 'bernoulli') or (var == 'binomial'):
+            y_new[j] = y_bin_new[type_counter['count']]
+            type_counter['count'] =  type_counter['count'] + 1
+        elif var == 'ordinal':
+            y_new[j] = y_ord_new[type_counter[var]]
+            type_counter[var] =  type_counter[var] + 1
+        elif var == 'categorical':
+            y_new[j] = y_categ_new[type_counter[var]]
+            type_counter[var] =  type_counter[var] + 1
+        elif var == 'continuous':
+            y_new[j] = y_cont_new[type_counter[var]]
+            type_counter[var] =  type_counter[var] + 1
+        else:
+            raise ValueError(var, 'Type not implemented')
+
+    return y_new
+
+
+#========================================================
+# Optimisation process
+#========================================================
+
+def error(true, pred, cat_features):
+    '''
+    Compute a distance between the observed values and the predicted observed
+    values
+
+    Parameters
+    ----------
+    true : TYPE
+        DESCRIPTION.
+    pred : TYPE
+        DESCRIPTION.
+    cat_features : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    TYPE
+        DESCRIPTION.
+
+    '''
+    n_values = len(true)
+    
+    error = np.zeros(n_values)
+    for j in range(n_values):
+                
+        if cat_features[j]:
+            error[j] = float(true[j] != pred[j])
+        else:
+            norm = true[j] if true[j] != 0 else 1.0
+            error[j] = np.sqrt(np.mean((true[j] - pred[j]) ** 2) / norm) 
+
+    return error.mean()
+    
+def pooling(preds, var_distrib):
+    p = preds.shape[1]
+    pooled_pred = np.zeros(p)
+    
+    for j in range(p):
+        if var_distrib[j] == 'categorical':
+            pooled_pred[j] = str(float(mode(preds[:,j])[0][0]))
+        else:
+            pooled_pred[j] = preds[:,j].mean()
+
+    return pooled_pred
+
+
+def draw_obs(z, nan_mask, var_distrib, lambda_bin, lambda_ord, lambda_categ, lambda_cont,\
+         nj_bin, nj_ord, nj_categ, y_std, MM):
+            
+    #===================================================
+    # Generate a batch of pseudo-observations
+    #===================================================
+    
+    y_bin_new = []
+    y_categ_new = []
+    y_ord_new = []
+    y_cont_new = []
+    
+    for mm in range(MM):
+        y_bin_new.append(draw_new_bin(lambda_bin, z[n_axis], nj_bin))
+        y_categ_new.append(draw_new_categ(lambda_categ, z[n_axis], nj_categ))
+        y_ord_new.append(draw_new_ord(lambda_ord, z[n_axis], nj_ord))
+        y_cont_new.append(draw_new_cont(lambda_cont, z[n_axis]))
+        
+    # Stack the quantities
+    y_bin_new = np.vstack(y_bin_new)
+    y_categ_new = np.vstack(y_categ_new)
+    y_ord_new = np.vstack(y_ord_new)
+    y_cont_new = np.vstack(y_cont_new)
+    
+    # "Destandardize" the continous data
+    y_cont_new = y_cont_new * y_std
+    
+    # Put them in the right order and append them to y
+    type_counter = {'count': 0, 'ordinal': 0,\
+                    'categorical': 0, 'continuous': 0} 
+    
+    y_new = np.full((MM, nan_mask.shape[0]), np.nan)
+    
+    # Quite dirty:
+    for j, var in enumerate(var_distrib):
+        if (var == 'bernoulli') or (var == 'binomial'):
+            y_new[:, j] = y_bin_new[:, type_counter['count']]
+            type_counter['count'] =  type_counter['count'] + 1
+        elif var == 'ordinal':
+            y_new[:, j] = y_ord_new[:, type_counter[var]]
+            type_counter[var] =  type_counter[var] + 1
+        elif var == 'categorical':
+            y_new[:, j] = y_categ_new[:, type_counter[var]]
+            type_counter[var] =  type_counter[var] + 1
+        elif var == 'continuous':
+            y_new[:, j] = y_cont_new[:, type_counter[var]]
+            type_counter[var] =  type_counter[var] + 1
+        else:
+            raise ValueError(var, 'Type not implemented')
+
+    return y_new
+
+def dist(z, target, var_distrib, lambda_bin, lambda_ord, lambda_categ, lambda_cont,\
+         nj_bin, nj_ord, nj_categ, y_std):
+    
+    
+    MM = 100
+    complete_i = np.isfinite(target)
+    cat_features = var_distrib == 'categorical'
+    
+    y_new = draw_obs(z, ~complete_i, var_distrib, lambda_bin, lambda_ord, lambda_categ, lambda_cont,\
+             nj_bin, nj_ord, nj_categ, y_std, MM)
+        
+    # Pool the predictions
+    y_new = pooling(y_new, var_distrib)
+    err = error(target[complete_i], y_new[complete_i], cat_features[complete_i])
+    print(err)
+    return err
+
+
+
+from autograd import grad
+
+def grad_stat(z, target, var_distrib, weights, lambda_bin, nj_bin, lambda_categ, nj_categ,\
+             lambda_ord, nj_ord, lambda_cont, y_std):
+    grad_dist = grad(stat_all)
+    return grad_dist(z, target, var_distrib, weights, lambda_bin, nj_bin, lambda_categ, nj_categ,\
+                 lambda_ord, nj_ord, lambda_cont, y_std)
+
+    
+    

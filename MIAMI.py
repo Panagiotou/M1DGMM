@@ -5,24 +5,22 @@ Created on Thu Jan 14 16:11:28 2021
 @author: RobF
 """
 
-            
-
-  
 import pandas as pd
 from m1dgmm import M1DGMM
+from scipy.linalg import block_diag
 from oversample import draw_new_bin, draw_new_ord,\
                             draw_new_categ, draw_new_cont
                             
 import autograd.numpy as np
-
+from autograd.numpy.random import multivariate_normal
 
 
 def MIAMI(y, n_clusters, r, k, init, var_distrib, nj, authorized_ranges,\
           target_nb_pseudo_obs = 500, it = 50, \
           eps = 1E-05, maxstep = 100, seed = None, perform_selec = True,\
-              dm = None, max_patience = 1): # dm: Hack to remove
+              dm = [], max_patience = 1): # dm: Hack to remove
     
-    ''' Fit a Generalized Linear Mixture of Latent Variables Model (GLMLVM)
+    ''' Generates pseudo-observations from a trained M1DGMM
     
     y (numobs x p ndarray): The observations containing mixed variables
     n_clusters (int): The number of clusters to look for in the data
@@ -32,6 +30,8 @@ def MIAMI(y, n_clusters, r, k, init, var_distrib, nj, authorized_ranges,\
     var_distrib (p 1darray): An array containing the types of the variables in y 
     nj (p 1darray): For binary/count data: The maximum values that the variable can take. 
                     For ordinal data: the number of different existing categories for each variable
+    authorized_ranges (ndarray): The ranges in which the observations have to lie in
+    target_nb_pseudo_obs (int): The number of pseudo-observations to generate         
     it (int): The maximum number of MCEM iterations of the algorithm
     eps (float): If the likelihood increase by less than eps then the algorithm stops
     maxstep (int): The maximum number of optimisation step for each variable
@@ -47,9 +47,8 @@ def MIAMI(y, n_clusters, r, k, init, var_distrib, nj, authorized_ranges,\
              eps, maxstep, seed, perform_selec = perform_selec,\
                  dm = dm, max_patience = max_patience)
         
-    
     # Upacking the model from the M1DGMM output
-    best_z = out['best_z']
+    #best_z = out['best_z']
     k = out['best_k']
     r = out['best_r']
     w_s = out['best_w_s'] 
@@ -57,6 +56,8 @@ def MIAMI(y, n_clusters, r, k, init, var_distrib, nj, authorized_ranges,\
     lambda_ord = out['lambda_ord'] 
     lambda_categ = out['lambda_categ'] 
     lambda_cont = out['lambda_cont'] 
+    mu_s = out['mu'] 
+    sigma_s = out['sigma'] 
     
     nj_bin = nj[pd.Series(var_distrib).isin(['bernoulli', 'binomial'])].astype(int)
     nj_ord = nj[var_distrib == 'ordinal'].astype(int)
@@ -64,16 +65,14 @@ def MIAMI(y, n_clusters, r, k, init, var_distrib, nj, authorized_ranges,\
 
     y_std = y[:,var_distrib == 'continuous'].std(axis = 0, keepdims = True)
     
-    M0 = best_z.shape[0]
-    S0 = best_z.shape[-1]
+    M0 = 100 # The number of z to draw 
+    S0 = np.prod(k)
+    MM = 30 # The number of y to draw for each z
         
     #=======================================================
     # Data augmentation part
     #=======================================================
-                                        
-    # Best z_s might be of a wrong dimension after architecture selection:
-    # Have to deal with it in the future.
-    
+                                            
     # Create pseudo-observations iteratively:
     nb_pseudo_obs = 0
     
@@ -84,22 +83,40 @@ def MIAMI(y, n_clusters, r, k, init, var_distrib, nj, authorized_ranges,\
     while nb_pseudo_obs <= target_nb_pseudo_obs:
         
         #===================================================
+        # Generate a batch of latent variables
+        #===================================================
+        
+        # Draw some z^{(1)} | Theta using z^{(1)} | s, Theta
+        z = np.zeros((M0, r[0]))
+        
+        z0_s = multivariate_normal(size = (M0, 1), \
+            mean = mu_s[0].flatten(order = 'C'), cov = block_diag(*sigma_s[0]))
+        z0_s = z0_s.reshape(M0, S0, r[0], order = 'C')
+        
+        comp_chosen = np.random.choice(S0, M0, p = w_snorm)
+        for m in range(M0): # Dirty loop for the moment
+            z[m] = z0_s[m, comp_chosen[m]] 
+      
+        #===================================================
         # Generate a batch of pseudo-observations
         #===================================================
         
-        # !!! Can use the draw z_s with mu and sigma..
-        # !!!  Sûr de ce schema de tirage ?
-        # Draw some z^{(1)} | Theta
-        comp_chosen = np.random.choice(S0, M0, p = w_snorm)
-        z = np.zeros((M0, S0))
-        for m in range(M0): # Dirty loop for the moment
-            z = best_z[:,:,comp_chosen[m]] # !!! Manque un M0 ici...
+        y_bin_new = []
+        y_categ_new = []
+        y_ord_new = []
+        y_cont_new = []
         
-        # Draw the new y
-        y_bin_new = draw_new_bin(lambda_bin, z, nj_bin)
-        y_categ_new = draw_new_categ(lambda_categ, z, nj_categ)
-        y_ord_new = draw_new_ord(lambda_ord, z, nj_ord)
-        y_cont_new = draw_new_cont(lambda_cont, z)
+        for mm in range(MM):
+            y_bin_new.append(draw_new_bin(lambda_bin, z, nj_bin))
+            y_categ_new.append(draw_new_categ(lambda_categ, z, nj_categ))
+            y_ord_new.append(draw_new_ord(lambda_ord, z, nj_ord))
+            y_cont_new.append(draw_new_cont(lambda_cont, z))
+            
+        # Stack the quantities
+        y_bin_new = np.vstack(y_bin_new)
+        y_categ_new = np.vstack(y_categ_new)
+        y_ord_new = np.vstack(y_ord_new)
+        y_cont_new = np.vstack(y_cont_new)
         
         # "Destandardize" the continous data
         y_cont_new = y_cont_new * y_std
@@ -108,8 +125,9 @@ def MIAMI(y, n_clusters, r, k, init, var_distrib, nj, authorized_ranges,\
         type_counter = {'count': 0, 'ordinal': 0,\
                         'categorical': 0, 'continuous': 0} 
         
-        y_new = np.full((z.shape[0], y.shape[1]), np.nan)
+        y_new = np.full((M0 * MM, y.shape[1]), np.nan)
         
+        # Quite dirty:
         for j, var in enumerate(var_distrib):
             if (var == 'bernoulli') or (var == 'binomial'):
                 y_new[:, j] = y_bin_new[:, type_counter['count']]
@@ -140,15 +158,14 @@ def MIAMI(y, n_clusters, r, k, init, var_distrib, nj, authorized_ranges,\
             
         # Keep an observation if it lies at least into one of the ranges possibility
         mask = np.any(mask.mean(2) == 1, axis = 1)   
-        #if np.sum(mask) !=0:
-            #print('Add', np.sum(mask))
         
         y_new = y_new[mask]
         y_new_all.append(y_new)
         nb_pseudo_obs = len(np.concatenate(y_new_all))
         
-        
+    # Keep target_nb_pseudo_obs pseudo-observations
     y_new_all = np.concatenate(y_new_all)
+    y_new_all = y_new_all[:target_nb_pseudo_obs]
     
     y_all = np.vstack([y, y_new_all])
     share_kept_pseudo_obs = len(y_new_all) / total_nb_obs_generated

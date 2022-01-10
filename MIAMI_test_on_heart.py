@@ -12,8 +12,6 @@ os.chdir('C:/Users/rfuchs/Documents/GitHub/M1DGMM')
 
 from copy import deepcopy
 
-from sklearn.metrics import precision_score
-from sklearn.metrics import confusion_matrix
 from sklearn.preprocessing import LabelEncoder 
 from sklearn.preprocessing import OneHotEncoder
 
@@ -21,15 +19,11 @@ import pandas as pd
 
 from gower import gower_matrix
 import matplotlib .pyplot as plt
-from sklearn.metrics import silhouette_score
 
 
-from m1dgmm import M1DGMM
-from MIAMI import miami
+from miami import MIAMI
 from init_params import dim_reduce_init
-from metrics import misc
-from data_preprocessing import gen_categ_as_bin_dataset, \
-        compute_nj
+from data_preprocessing import compute_nj
 
 
 import autograd.numpy as np
@@ -71,7 +65,6 @@ var_distrib = np.array(['continuous', 'bernoulli', 'categorical', 'continuous',\
                         'categorical']) 
     
 # Ordinal data already encoded
- 
 y_categ_non_enc = deepcopy(y)
 vd_categ_non_enc = deepcopy(var_distrib)
 
@@ -101,16 +94,17 @@ p_new = y.shape[1]
 cf_non_enc = np.logical_or(vd_categ_non_enc == 'categorical', vd_categ_non_enc == 'bernoulli')
 
 # Non encoded version of the dataset:
-y_nenc_typed = y_categ_non_enc.astype(np.object)
-y_np_nenc = y_nenc_typed.values
+#y_nenc_typed = y_categ_non_enc.astype(np.object)
+#y_np_nenc = y_nenc_typed.values
 
-# Defining distances over the non encoded features
-dm = gower_matrix(y_nenc_typed, cat_features = cf_non_enc) 
 
 dtype = {y.columns[j]: np.float64 if (var_distrib[j] != 'bernoulli') and \
-        (var_distrib[j] != 'categorical') else np.str for j in range(p_new)}
+        (var_distrib[j] != 'categorical') else str for j in range(p_new)}
 
 y = y.astype(dtype, copy=True)
+
+# !!! Defining distances over the non encoded features
+dm = gower_matrix(y, cat_features = cf_non_enc) 
 
 #===========================================#
 # Running the algorithm
@@ -145,8 +139,8 @@ authorized_ranges = np.stack([[-10000,10000] for var in var_distrib] ).T
 # MIAMI
 prince_init = dim_reduce_init(y, n_clusters, k, r, nj, var_distrib, seed = None,\
                               use_famd=True)
-out = miami(y_np, n_clusters, r, k, prince_init, var_distrib, nj, authorized_ranges, nb_pobs, it,\
-             eps, maxstep, seed, perform_selec = True)
+out = MIAMI(y_np, n_clusters, r, k, prince_init, var_distrib, nj, authorized_ranges, nb_pobs, it,\
+             eps, maxstep, seed, dm = dm, perform_selec = True)
 
 # Plotting utilities
 varnames = ['age', 'sex', 'chest pain type', 'resting blood pressure',\
@@ -156,7 +150,7 @@ varnames = ['age', 'sex', 'chest pain type', 'resting blood pressure',\
             'the slope of the peak exercise ST segment',\
             'number of major vessels (0-3)', 'thal']
 
-y_new = out['y'][len(y):]
+y_new = out['y_all'][len(y):]
 
 # Choose the variables number
 var1 = -1
@@ -170,7 +164,7 @@ plt.xlabel(varnames[var1])
 plt.ylabel('Number of observations')
 plt.legend(['Genuine observations', 'Synthetic observations'])
 plt.title('1D projections of genuine and synthetic obervations')
-
+plt.show()
 
 # Check for 2D distribution
 plt.scatter(y_np[:,var1], y_np[:,var2],  label = 'Genuine observations', s = 1)

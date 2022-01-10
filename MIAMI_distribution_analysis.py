@@ -20,7 +20,6 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import f1_score
 
 
-
 os.chdir(r'C:\Users\rfuchs\Documents\These\Stats\mixed_dgmm\datasets')
 
 train_test_folder = 'adult'

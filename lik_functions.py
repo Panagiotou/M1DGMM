@@ -29,20 +29,21 @@ def log_py_zM_bin_j(lambda_bin_j, y_bin_j, zM, k, nj_bin_j):
     numobs = len(y_bin_j)
     
     yg = np.repeat(y_bin_j[np.newaxis], axis = 0, repeats = M)
-    yg = yg.astype(np.float)
+    yg = yg.astype(float)
 
-    nj_bin_j = np.float(nj_bin_j)
+    nj_bin_j = float(nj_bin_j)
 
-    coeff_binom = binom(nj_bin_j, yg).reshape(M, 1, numobs)
+    coeff_binom = binom(nj_bin_j, yg).reshape(M, 1, numobs, order = 'C')
     
-    eta = np.transpose(zM, (0, 2, 1)) @ lambda_bin_j[1:].reshape(1, r, 1)
+    eta = np.transpose(zM, (0, 2, 1)) @ lambda_bin_j[1:].reshape(1, r, 1, order = 'C') 
     eta = eta + lambda_bin_j[0].reshape(1, 1, 1) # Add the constant
     
     den = nj_bin_j * log_1plusexp(eta)
-    num = eta @ y_bin_j[np.newaxis, np.newaxis]  
+
+    num = eta @ y_bin_j[np.newaxis, np.newaxis].astype(float)  
     log_p_y_z = num - den + np.log(coeff_binom)
     
-    return np.transpose(log_p_y_z, (0, 2, 1)).astype(np.float)
+    return np.transpose(log_p_y_z, (0, 2, 1)).astype(float)
 
 def log_py_zM_bin(lambda_bin, y_bin, zM, k, nj_bin):
     ''' Compute sum_j log p(y_j | zM, s1 = k1) of all the binomial data with a for loop
@@ -101,7 +102,7 @@ def log_py_zM_ord_j(lambda_ord_j, y_oh_j, zM, k, nj_ord_j):
     Lambda = lambda_ord_j[-r:]
  
     broad_lambda0 = lambda0.reshape((nj_ord_j - 1, 1, 1, 1))
-    eta = broad_lambda0 - (np.transpose(zM, (0, 2, 1)) @ Lambda.reshape((1, r, 1)))[np.newaxis]
+    eta = broad_lambda0 - (np.transpose(zM, (0, 2, 1)) @ Lambda.reshape((1, r, 1), order = 'C'))[np.newaxis]
     
     gamma = expit(eta)
     
@@ -131,10 +132,12 @@ def log_py_zM_ord(lambda_ord, y_ord, zM, k, nj_ord):
     '''
     
     nb_ord = y_ord.shape[1]
-    enc = OneHotEncoder(categories='auto')
 
     log_pyzM = 0
     for j in range(nb_ord):
+        enc = OneHotEncoder(categories = [list(range(nj_ord[j]))])
+        #enc = OneHotEncoder(categories = 'auto')
+
         y_oh_j = enc.fit_transform(y_ord[:,j][..., n_axis]).toarray()
         log_pyzM += log_py_zM_ord_j(lambda_ord[j], y_oh_j, zM, k, nj_ord[j])
         
@@ -153,7 +156,12 @@ def ord_loglik_j(lambda_ord_j, y_oh_j, zM, k, ps_y, p_z_ys, nj_ord_j):
     --------------------------------------------------------------
     returns (float): E_{zM, s | y, theta}(y_ord_j | zM, s1 = k1)
     ''' 
+    #print(y_oh_j.shape)
+    #print(p_z_ys.shape)
+
     log_pyzM_j = log_py_zM_ord_j(lambda_ord_j, y_oh_j, zM, k, nj_ord_j)
+    #print(log_pyzM_j.shape)
+    #print('------------------------------')
     return -np.sum(ps_y * np.sum(np.expand_dims(p_z_ys, axis = 3) * log_pyzM_j, (0,3)))
 
 
@@ -182,9 +190,9 @@ def log_py_zM_categ_j(lambda_categ_j, y_categ_j, zM, k, nj_categ_j):
     lambda_categ_j_ = lambda_categ_j.reshape(nj, r + 1, order = 'C')
 
     eta = zM_broad @ lambda_categ_j_[:, 1:][n_axis, n_axis, ..., n_axis] # Check que l'on fait r et pas k ?
-    eta = eta + lambda_categ_j_[:,0].reshape(1, 1, nj_categ_j, 1, 1) # Add the constant
+    eta = eta + lambda_categ_j_[:,0].reshape(1, 1, nj_categ_j, 1, 1, order = 'C')  # Add the constant
     
-    pi = softmax_(eta.astype(np.float), axis = 2)
+    pi = softmax_(eta.astype(float), axis = 2)
     
     # Numeric stability
     pi = np.where(pi <= 0, epsilon, pi)
@@ -212,9 +220,10 @@ def log_py_zM_categ(lambda_categ, y_categ, zM, k, nj_categ):
     '''
     log_py_zM = 0
     nb_categ = len(nj_categ)
-    enc = OneHotEncoder(categories='auto')
+    #enc = OneHotEncoder(categories='auto')
     
     for j in range(nb_categ):
+        enc = OneHotEncoder(categories = [list(range(nj_categ[j]))])
         y_categ_j = enc.fit_transform(y_categ[:,j][..., n_axis]).toarray()
         log_py_zM += log_py_zM_categ_j(lambda_categ[j], y_categ_j, zM, k, nj_categ[j])
         
@@ -283,7 +292,7 @@ def log_py_zM_cont_j(lambda_cont_j, y_cont_j, zM, k):
     yg = np.repeat(y_cont_j[np.newaxis], axis = 0, repeats = M)
     yg = np.expand_dims(yg, 1)
     
-    eta = np.transpose(zM, (0, 2, 1)) @ lambda_cont_j[1:].reshape(1, r, 1)
+    eta = np.transpose(zM, (0, 2, 1)) @ lambda_cont_j[1:].reshape(1, r, 1, order = 'C')
     eta = eta + lambda_cont_j[0].reshape(1, 1, 1) # Add the constant
     
     return t(- 0.5 * (np.log(2 * np.pi) + (yg - eta) ** 2), (0, 2, 1))
