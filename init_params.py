@@ -80,7 +80,7 @@ def get_MFA_params(zl, kl, rl_nextl):
         
         clusters_found, count = np.unique(s, return_counts = True)
 
-        if (len(clusters_found) == kl) & (count >= 5).all():
+        if (len(clusters_found) == kl):# & (count >= 5).all():
             not_all_groups = False
             
         empty_count_counter += 1

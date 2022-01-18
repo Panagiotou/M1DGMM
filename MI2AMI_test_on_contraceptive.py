@@ -10,19 +10,16 @@ import os
 os.chdir('C:/Users/rfuchs/Documents/GitHub/M1DGMM')
 
 import pandas as pd
-from copy import deepcopy
 from gower import gower_matrix
 import matplotlib .pyplot as plt
-from sklearn.preprocessing import LabelEncoder 
 
 from mi2ami import MI2AMI
 from init_params import dim_reduce_init
 from utilities import vars_contributions
-from data_preprocessing import compute_nj#, data_processing
-
+from data_preprocessing import compute_nj, data_processing
 import autograd.numpy as np
 
-res = 'C:/Users/rfuchs/Documents/These/Stats/MIAMI/Missing_data/MI2AMI/'
+res = 'C:/Users/rfuchs/Documents/These/Stats/MIAMI/Missing_data/MI2AMI/Contraceptive/'
 
 ###############################################################################
 ###############     Contraceptive    vizualisation      #######################
@@ -35,210 +32,207 @@ dtypes_dict = {'continuous': float, 'categorical': str, 'ordinal': float,\
 # Importing data
 #===========================================#
 
-os.chdir('C:/Users/rfuchs/Documents/These/Stats/MIAMI/Missing_data/Data')
-
-full_contra = pd.read_csv('cmc2.csv', sep = ';')
-
 dataset_name = 'MCAR30'
-y = pd.read_csv(dataset_name + '.csv', sep = ';').iloc[:,1:]
 
-var_distrib = np.array(['continuous', 'ordinal', 'ordinal', 'continuous',\
+os.chdir('C:/Users/rfuchs/Documents/These/Stats/MIAMI/Missing_data/Data/Contraceptive')
+
+full_contra = pd.read_csv('Contraceptive.csv', sep = ';')
+p = full_contra.shape[1]
+
+    
+var_distrib = np.array(['continuous', 'ordinal', 'ordinal', 'binomial',\
                         'bernoulli', 'bernoulli', 'categorical', 'ordinal',\
                         'bernoulli', 'categorical'])
-    
-#yy = data_processing(y, var_distrib)
-#y.loc[:, var_distrib == 'ordinal'].iloc[:,1].value_counts()
 
-#===========================================#
-# Formating the data
-#===========================================#
+for dataset_name in ['MCAR10']:
 
-le_dict = {}
-
-nan_mask = y.isnull()
-                        
-# Encode categorical datas
-for col_idx, colname in enumerate(y.columns):
-    if var_distrib[col_idx] == 'categorical':
-        le = LabelEncoder()
-        y[colname] = le.fit_transform(y[colname])
-        le_dict[colname] = deepcopy(le)
-
-# Encode binary data
-for col_idx, colname in enumerate(y.columns):
-    if var_distrib[col_idx] == 'bernoulli': 
-        le = LabelEncoder()
-        y[colname] = le.fit_transform(y[colname])
-        le_dict[colname] = deepcopy(le)
+    y = pd.read_csv(dataset_name + '.csv', sep = ';').iloc[:,1:].astype(float)
         
-# Encode ordinal data
-for col_idx, colname in enumerate(y.columns):
-    if var_distrib[col_idx] == 'ordinal': 
-        le = LabelEncoder()
-        y[colname] = le.fit_transform(y[colname])
-        le_dict[colname] = deepcopy(le)
-           
-y = y.where(~nan_mask, np.nan)
-
-nj, nj_bin, nj_ord, nj_categ = compute_nj(full_contra, var_distrib)
-nb_cont = np.sum(var_distrib == 'continuous')
-
-p_new = y.shape[1]
-
-# Feature category (cf)
-dtype = {y.columns[j]: dtypes_dict[var_distrib[j]] for j in range(p_new)}
-
-full_contra = full_contra.astype(dtype, copy=True)
-complete_y = y[~y.isna().any(1)]
-complete_y = complete_y.astype(dtype, copy=True)
-
-# Feature category (cf)
-cat_features = var_distrib == 'categorical'
-
-# Defining distance matrix
-dm = gower_matrix(complete_y, cat_features = cat_features) 
-
-#===========================================#
-# Hyperparameters
-#===========================================# 
-
-n_clusters = 2
-nb_pobs = 100 # Target for pseudo observations
-r = np.array([2, 1])
-numobs = len(y)
-k = [n_clusters]
-
-seed = 1
-init_seed = 2
+    #===========================================#
+    # Formating the data
+    #===========================================#
+    nan_mask = y.isnull()
+    cat_features = var_distrib == 'categorical'
+    y, le_dict  = data_processing(y, var_distrib)
+    y = y.where(~nan_mask, np.nan)
+              
     
-eps = 1E-05
-it = 10
-maxstep = 100
-
-#===========================================#
-# MI2AMI initialisation
-#===========================================# 
-
-init = dim_reduce_init(complete_y, n_clusters, k, r, nj, var_distrib, seed = None,\
-                              use_famd=True)
-out = MI2AMI(y, n_clusters, r, k, init, var_distrib, nj, nan_mask,\
-             nb_pobs, it, eps, maxstep, seed, dm = dm, perform_selec = False)
-
-completed_y = pd.DataFrame(out['completed_y'].round(0), columns = full_contra.columns)
-
-#*************************************
-# Ensure that continuous variables stay in their support
-#*************************************
-
-for j, colname in enumerate(completed_y.columns):
-    if var_distrib[j] == 'continuous':
-        completed_y.loc[completed_y[colname] < y[colname].min(), colname] = y[colname].min()
-        completed_y.loc[completed_y[colname] > y[colname].max(), colname] = y[colname].max()
-
-#===========================================#
-# MI2AMI full
-#===========================================# 
-
-#*************************************
-# Defining distance matrix
-#*************************************
-
-dm2 = gower_matrix(completed_y, cat_features = cat_features) 
-
-init2 = dim_reduce_init(completed_y.astype(dtype), n_clusters, k, r, nj, var_distrib, seed = None,\
-                              use_famd=True)
+    nj, nj_bin, nj_ord, nj_categ = compute_nj(full_contra, var_distrib)
+    nb_cont = np.sum(var_distrib == 'continuous')
     
-out2 = MI2AMI(completed_y.values, n_clusters, r, k, init2, var_distrib, nj, nan_mask,\
-             nb_pobs, it, eps, maxstep, seed, dm = dm2, perform_selec = False)
-
-completed_y2 = pd.DataFrame(out2['completed_y'], columns = full_contra.columns)
-completed_y2 = completed_y2.astype(float).round(0)
-
-#*************************************
-# Ensure that continuous variables stay in their support
-#*************************************
-
-for j, colname in enumerate(completed_y2.columns):
-    if var_distrib[j] == 'continuous':
-        completed_y2.loc[completed_y2[colname] < y[colname].min(), colname] = y[colname].min()
-        completed_y2.loc[completed_y2[colname] > y[colname].max(), colname] = y[colname].max()
-
-#================================================================
-# Inverse transform both datasets
-#================================================================
-
-for j, colname in enumerate(y.columns):
-    if colname in le_dict.keys():
-        completed_y[colname] = le_dict[colname].inverse_transform(completed_y[colname].astype(int))
-        completed_y2[colname] = le_dict[colname].inverse_transform(completed_y2[colname].astype(int))
-
-assert np.nansum(np.abs(completed_y[~nan_mask].astype(float) - full_contra[~nan_mask].astype(float))) == 0
-assert np.nansum(np.abs(completed_y2[~nan_mask].astype(float) - full_contra[~nan_mask].astype(float))) == 0
-
-# Mimick the format
-completed_y = completed_y.astype(int)
-completed_y2 = completed_y2.astype(int)
-
-completed_y2.to_csv(res + 'imp' + dataset_name + '.csv', index = False)
-
-#================================================================
-# Diagnostic
-#================================================================
-
-## RMSE and PFC
-completed = {'init': completed_y, 'full': completed_y2}
-error = pd.DataFrame(columns = full_contra.columns, index = completed.keys()) 
-
-# TO DO: ADD weights ?
-for j, col in enumerate(full_contra.columns):
-    for method in completed.keys():
-        # Fetch the true data
-        true = full_contra[nan_mask[col]][col]
-        imputed = completed[method][nan_mask[col]][col]
+    # Feature category (cf)
+    dtype = {y.columns[j]: dtypes_dict[var_distrib[j]] for j in range(p)}
+    
+    full_contra = full_contra.astype(dtype, copy=True)
+    complete_y = y[~y.isna().any(1)].astype(dtype, copy=True)
+    
+    # Defining distance matrix
+    dm = gower_matrix(complete_y, cat_features = cat_features) 
+    
+    #===========================================#
+    # Hyperparameters
+    #===========================================# 
+    
+    n_clusters = 4
+    nb_pobs = 100 # Target for pseudo observations
+    r = np.array([2, 1])
+    numobs = len(y)
+    k = [n_clusters]
+    
+    seed = 1
+    init_seed = 2
         
-        if (var_distrib[j] == 'continuous') & (var_distrib[j] == 'ordinal'): # NRMSE
-            print(true)
-            error.loc[method, col] = np.sqrt(np.mean((true - imputed) ** 2) / true.var())
-        else:
-            error.loc[method, col] = (true.astype(int)!= imputed.astype(int)).mean()
-
-cols = ["nrmseAge","nrmseWeduc","nrmseHeduc","nrmesChild","PFCrelig","PFCwork",\
-        "PFCoccup","rnmseStand","PFCmedia","PFCcont","Gower"]
+    eps = 1E-05
+    it = 10
+    maxstep = 100
     
-# Add Gower
-for method in completed.keys():
-    gow = []
-    for j, col in enumerate(full_contra.columns):
-        # Fetch the true data
-        true = full_contra[nan_mask[col]][col]
-        imputed = completed[method][nan_mask[col]][col]
+    nb_runs = 4
+    
+    for run_idx in range(nb_runs):
         
-        if (var_distrib[j] == 'continuous') & (var_distrib[j] == 'ordinal'): # NRMSE
-            cont_range = true.max() - true.min()
-            gow.append(np.mean(np.abs(true - imputed))/cont_range)
-        else:
-            gow.append((true.astype(int) != imputed.astype(int)).mean())
-    error.loc[method, 'gow'] = np.mean(gow)
+        #===========================================#
+        # MI2AMI initialisation
+        #===========================================# 
+        
+        init = dim_reduce_init(complete_y, n_clusters, k, r, nj, var_distrib, seed = None,\
+                                      use_famd=False)
+        out = MI2AMI(y, n_clusters, r, k, init, var_distrib, nj, nan_mask,\
+                     nb_pobs, it, eps, maxstep, seed, dm = dm, perform_selec = False)
+        
+        completed_y = pd.DataFrame(out['completed_y'].round(0), columns = full_contra.columns)
+        
+        
+        #===========================================#
+        # MI2AMI full
+        #===========================================# 
+        
+        dm2 = gower_matrix(completed_y, cat_features = cat_features) 
+        
+        init2 = dim_reduce_init(completed_y.astype(dtype), n_clusters, k, r, nj, var_distrib, seed = None,\
+                                      use_famd=False)
+            
+        out2 = MI2AMI(completed_y, n_clusters, r, k, init2, var_distrib, nj, nan_mask,\
+                     nb_pobs, it, eps, maxstep, seed, dm = dm2, perform_selec = False)
+        
+        completed_y2 = pd.DataFrame(out2['completed_y'], columns = full_contra.columns)
+        completed_y2 = completed_y2.astype(float).round(0)
+        
+        #================================================================
+        # Inverse transform both datasets
+        #================================================================
+        
+        for j, colname in enumerate(y.columns):
+            if colname in le_dict.keys():
+                completed_y[colname] = le_dict[colname].inverse_transform(completed_y[colname].astype(int))
+                completed_y2[colname] = le_dict[colname].inverse_transform(completed_y2[colname].astype(int))
+        
+        assert np.nansum(np.abs(completed_y[~nan_mask].astype(float) - full_contra[~nan_mask].astype(float))) == 0
+        assert np.nansum(np.abs(completed_y2[~nan_mask].astype(float) - full_contra[~nan_mask].astype(float))) == 0
+        
+        # Mimick the format
+        completed_y = completed_y.astype(int)
+        completed_y2 = completed_y2.astype(int)
+        
+        #completed_y2.to_csv(res + 'Run' + str(run_idx) + '/imp' + dataset_name + '.csv', index = False)
+        
+        #================================================================
+        # Diagnostic
+        #================================================================
+        
+        ## RMSE and PFC
+        completed = {'init': completed_y, 'full': completed_y2}
+        error = pd.DataFrame(columns = full_contra.columns, index = completed.keys()) 
+        
+        # TO DO: ADD weights ?
+        for j, col in enumerate(full_contra.columns):
+            for method in completed.keys():
+                # Fetch the true data
+                true = full_contra[nan_mask[col]][col]
+                imputed = completed[method][nan_mask[col]][col]
+                
+                if var_distrib[j] in ['continuous', 'ordinal', 'binomial']: # NRMSE
+                    error.loc[method, col] = np.sqrt(np.mean((true - imputed) ** 2) / full_contra[col].var())
+                else:
+                    error.loc[method, col] = (true.astype(int)!= imputed.astype(int)).mean()
+        
+        #cols = ["nrmseAge","nrmseWeduc","nrmseHeduc","nrmesChild","PFCrelig","PFCwork",\
+                #"PFCoccup","rnmseStand","PFCmedia","PFCcont","Gower"]
+            
+        # Add Gower
+        for method in completed.keys():
+            gow = []
+            for j, col in enumerate(full_contra.columns):
+                # Fetch the true data
+                true = full_contra[nan_mask[col]][col]
+                imputed = completed[method][nan_mask[col]][col]
+                
+                if var_distrib[j] in ['continuous', 'ordinal', 'binomial']: # NRMSE
+                    cont_range = true.max() - true.min()
+                    gow.append(np.mean(np.abs(true - imputed))/cont_range)
+                else:
+                    gow.append((true.astype(int) != imputed.astype(int)).mean())
+            error.loc[method, 'gow'] = np.mean(gow)
+        
+        #error.columns = cols
+        error.T
+        
+        #error.T[['full']].T.to_csv(res + 'Run' + str(run_idx) + '/res' + dataset_name + '.csv', index = False)
+        
 
-error.columns = cols
-error.T[['full']].T.to_csv(res + 'res' + dataset_name + '.csv', index = False)
 
 
-
-
-
-
-
-
-
-
-
-
-
+#================================================================
+## Variables Modality Analysis
+#================================================================
+for col in full_contra.columns:
+    full_contra[col].hist()
+    plt.title(col)
+    plt.show()
 
 #================================================================
 ## Diagnostic plots
 #================================================================
+
+# z vs other quantities
+zz = np.stack(out['zz'])
+var = 'WifeAge'
+obs_with_nan = y.loc[nan_mask.any(1)].reset_index(drop = True)
+nb_nan_per_obs = obs_with_nan.isna().sum(1)
+var_missing_idx = obs_with_nan[obs_with_nan[var].isna()].index
+true = full_contra[nan_mask[var]][var]
+imputed = completed[method][nan_mask[var]][var]
+error = np.abs(true - imputed).astype(float)
+
+
+pd.crosstab(true, imputed)
+
+# Plot of the z used to impute with respect to the distance bewteen y and y imputed
+plt.scatter(zz[:,0], zz[:,1])
+plt.title('All latent draws z for missing y')
+plt.show()
+
+# Plot of the z used to impute with respect to the distance bewteen y and y imputed
+
+plt.scatter(zz[var_missing_idx,0], zz[var_missing_idx,1], c=np.abs(true - imputed).astype(float), cmap='viridis')
+plt.title(var + ' full')
+#plt.xlim([-30, 30])
+#plt.ylim([-30, 30])
+
+plt.colorbar()
+plt.show()
+
+# Plot of the error as a function of the number of values to impute
+errors = [error[(nb_nan_per_obs[var_missing_idx] == i).to_list()].median() for i in range(1, 6)]
+plt.scatter(range(1,6), errors, cmap='viridis')
+
+# True vs error
+for true_value in list(set((true))):
+    plt.scatter(true_value, error[true == true_value].median(), color = 'blue')
+
+plt.scatter(true, error, cmap='viridis')
+
+out['lambda_cont']
+
 
 plt.scatter(error.loc['init'], error.loc['full'])
 plt.plot(np.linspace(0, 1), np.linspace(0, 1), color = 'red')
@@ -253,7 +247,6 @@ plt.scatter(full_contra[nan_mask[var]][var], completed_y2[nan_mask[var]][var])
 var = 'Standard'
 pd.crosstab(full_contra[nan_mask[var]][var], completed_y2[nan_mask[var]][var],\
             normalize = True, rownames=['True'], colnames = ['Imputed'])
-
 
 
 plt.scatter(full_contra[nan_mask.iloc[:,0]]['WifeAge'],\

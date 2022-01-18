@@ -186,7 +186,6 @@ def stat_bin(lambda_bin, z_new, nj_bin):
     
     nb_bin = len(nj_bin)    
     pi = []
-    #pi = np.full((nb_bin), np.nan)
 
     for j in range(nb_bin):
     
@@ -195,7 +194,6 @@ def stat_bin(lambda_bin, z_new, nj_bin):
         eta = eta + lambda_bin[j][0].reshape(1, 1) # Add the constant
         
         pi.append(expit(eta)[0][0])
-        #pi[j] = expit(eta)[0][0]
     pi = np.array(pi)
     
     return pi * nj_bin # Return the mean
@@ -356,7 +354,7 @@ def impute(z, var_distrib, lambda_bin, nj_bin, lambda_categ, nj_categ,\
 # Optimisation process
 #========================================================
 
-def error(true, pred, cat_features):
+def error(true, pred, cat_features, weights):
     '''
     Compute a distance between the observed values and the predicted observed
     values
@@ -369,6 +367,9 @@ def error(true, pred, cat_features):
         DESCRIPTION.
     cat_features : TYPE
         DESCRIPTION.
+    weights : TYPE
+        DESCRIPTION.
+    
 
     Returns
     -------
@@ -382,10 +383,10 @@ def error(true, pred, cat_features):
     for j in range(n_values):
                 
         if cat_features[j]:
-            error[j] = float(true[j] != pred[j])
+            error[j] = float(true[j] != pred[j]) * weights[j]
         else:
             norm = true[j] if true[j] != 0 else 1.0
-            error[j] = np.sqrt(np.mean((true[j] - pred[j]) ** 2) / norm) 
+            error[j] = np.sqrt(np.mean((true[j] - pred[j]) ** 2) / norm) * weights[j]
 
     return error.mean()
     

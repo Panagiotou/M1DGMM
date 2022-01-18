@@ -123,39 +123,30 @@ def bin_to_bern(Nj, yj_binom, zM_binom):
         
     return yk_bern, np.repeat(zM_binom, Nj, 0)
 
-def data_processing(y, var_distrib):
+def data_processing(y, var_distrib, cast_types = False):
     dtypes_dict = {'continuous': float, 'categorical': str, 'ordinal': float,\
                   'bernoulli': int, 'binomial': int}
+        
+    p = y.shape[1]
+    le_dict = {}
     
     df = deepcopy(y)
     #===========================================#
     # Formating the data
     #===========================================#
                             
-    # Encode categorical datas
-    le = LabelEncoder()
+    # Encode non-continuous variables
     for col_idx, colname in enumerate(df.columns):
-        if var_distrib[col_idx] == 'categorical': 
-            df[colname] = le.fit_transform(df[colname])
+        if np.logical_and(var_distrib[col_idx] != 'continuous', var_distrib[col_idx] != 'binomial'): 
 
-    # Encode binary data
-    le = LabelEncoder()
-    for col_idx, colname in enumerate(df.columns):
-        if var_distrib[col_idx] == 'bernoulli': 
+            le = LabelEncoder()
             df[colname] = le.fit_transform(df[colname])
-            
-    # Encode ordinal data
-    le = LabelEncoder()
-    for col_idx, colname in enumerate(df.columns):
-        if var_distrib[col_idx] == 'ordinal': 
-            df[colname] = le.fit_transform(df[colname])
+            le_dict[colname] = deepcopy(le)
         
-    nj, nj_bin, nj_ord, nj_categ = compute_nj(df, var_distrib)
-    p_new = df.shape[1]
-
     # Feature category (cf)
-    dtype = {df.columns[j]: dtypes_dict[var_distrib[j]] for j in range(p_new)}
-    df = df.astype(dtype)
+    if cast_types:
+        dtype = {df.columns[j]: dtypes_dict[var_distrib[j]] for j in range(p)}
+        df = df.astype(dtype)
     
-    return df
+    return df, le_dict
 
