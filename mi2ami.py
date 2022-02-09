@@ -93,26 +93,12 @@ def MI2AMI(y, n_clusters, r, k, init, var_distrib, nj,\
     y_std = complete_y[:,var_distrib == 'continuous'].astype(float).std(axis = 0,\
                                                                     keepdims = True)
     cat_features = var_distrib != 'categorical'
-    # Compute the associations between variables and use them as weights for the optimisation
-    '''
-    cat_features = var_distrib != 'categorical'
-    assoc = compute_associations(complete_y.astype(float), nominal_columns = cat_features).values     
-    np.fill_diagonal(assoc, 0.0)
-    assoc = np.abs(assoc)
-    weights = (assoc / assoc.sum(1, keepdims = True))
-    '''
     
+    # Compute the associations between variables and use them as weights for the optimisation
     assoc = cosine_similarity(vc, dense_output=True)
     np.fill_diagonal(assoc, 0.0)
     assoc = np.abs(assoc)
     weights = (assoc / assoc.sum(1, keepdims = True))
-
-    # Keep only the max value
-    #weights = np.abs(assoc)
-    #thr = - np.sort(- weights, axis = 1)[:,2][..., np.newaxis]
-    #weights[weights < thr] = 0
-    
-    #weights = np.ones((p, p))
 
     #==============================================
     # Optimisation sandbox
@@ -138,9 +124,9 @@ def MI2AMI(y, n_clusters, r, k, init, var_distrib, nj,\
     lb = np.array([])
     ub = np.array([])
     A = np.array([[]]).reshape((0,r[0]))
-    ## Corrected Binomial bounds (ub is actually +inf)
 
     if nb_bin > 0:
+        ## Corrected Binomial bounds (ub is actually +inf)
         bin_indices = var_distrib[np.logical_or(var_distrib == 'bernoulli', var_distrib == 'binomial')]
         binomial_indices = bin_indices == 'binomial'
 
@@ -156,7 +142,7 @@ def MI2AMI(y, n_clusters, r, k, init, var_distrib, nj,\
         A = np.concatenate([A, A_bin], axis = 0)
 
     if nb_cont > 0:
-        ## Corrected Gaussian bounds (ub is actually +inf)
+        ## Corrected Gaussian bounds
         lb_cont = np.nanmin(y[:, var_distrib == 'continuous'], 0) / y_std[0] - lambda_cont[:,0]
         ub_cont = np.nanmax(y[:, var_distrib == 'continuous'], 0) / y_std[0] - lambda_cont[:,0]
         A_cont = lambda_cont[:,1:]
@@ -166,11 +152,6 @@ def MI2AMI(y, n_clusters, r, k, init, var_distrib, nj,\
         ub = np.concatenate([ub, ub_cont])
         A = np.concatenate([A, A_cont], axis = 0)
         
-    ## Concatenate the constraints
-    #lb = np.concatenate([lb_bin, lb_cont])
-    #ub = np.concatenate([ub_bin, ub_cont])
-    #A = np.concatenate([A_bin, A_cont], axis = 0)
-
     lc = LinearConstraint(A, lb, ub, keep_feasible = True)
     
     zz = []
@@ -195,22 +176,6 @@ def MI2AMI(y, n_clusters, r, k, init, var_distrib, nj,\
             complete_categ = [l for idx, l in enumerate(lambda_categ) if idx in vars_i['categ']]
             complete_ord = [l for idx, l in enumerate(lambda_ord) if idx in vars_i['ord']]
             
-            
-            # Find the most promising regions
-            '''
-            opt = minimize(stat_all, z02, \
-                   args = (y[i, ~nan_mask_i], var_distrib[~nan_mask_i],\
-                   weights_i[~nan_mask_i],\
-                   lambda_bin[vars_i['bin']], nj_bin[vars_i['bin']],\
-                   complete_categ,\
-                   nj_categ[vars_i['categ']],\
-                   complete_ord,\
-                   nj_ord[vars_i['ord']],\
-                   lambda_cont[vars_i['cont']], y_std[:, vars_i['cont']]), 
-                   tol = eps, method='BFGS', jac = grad_stat,\
-                   options = {'maxiter': 1000})
-            '''
-                
             opt = minimize(stat_all, z02, \
                    args = (y[i, ~nan_mask_i], var_distrib[~nan_mask_i],\
                    weights_i[~nan_mask_i],\

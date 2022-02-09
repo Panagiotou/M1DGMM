@@ -223,7 +223,8 @@ def log_py_zM_categ(lambda_categ, y_categ, zM, k, nj_categ):
     #enc = OneHotEncoder(categories='auto')
     
     for j in range(nb_categ):
-        enc = OneHotEncoder(categories = [list(range(nj_categ[j]))])
+        classes = [str(nj) for nj in range(nj_categ[j])]
+        enc = OneHotEncoder(categories = [classes])
         y_categ_j = enc.fit_transform(y_categ[:,j][..., n_axis]).toarray()
         log_py_zM += log_py_zM_categ_j(lambda_categ[j], y_categ_j, zM, k, nj_categ[j])
         

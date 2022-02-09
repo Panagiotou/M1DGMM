@@ -311,6 +311,7 @@ def stat_all(z, target, var_distrib, weights, lambda_bin, nj_bin, lambda_categ, 
 
     return count_dist + categ_dist + ord_dist + cont_dist 
     
+
 def impute(z, var_distrib, lambda_bin, nj_bin, lambda_categ, nj_categ,\
              lambda_ord, nj_ord, lambda_cont, y_std):
     
@@ -483,4 +484,195 @@ def grad_stat(z, target, var_distrib, weights, lambda_bin, nj_bin, lambda_categ,
                  lambda_ord, nj_ord, lambda_cont, y_std)
 
     
+#================================================
+# Define convex set
+#================================================
+
+
+from scipy.spatial import HalfspaceIntersection, ConvexHull
+from scipy.optimize import linprog
+
+def feasible_point(A, b):
+    # finds the center of the largest sphere fitting in the convex hull
+    norm_vector = np.linalg.norm(A, axis=1)
+    A_ = np.hstack((A, norm_vector[:, None]))
+    b_ = b[:, None]
+    c = np.zeros((A.shape[1] + 1,))
+    c[-1] = -1
+    res = linprog(c, A_ub=A_, b_ub=b[:, None], bounds=(None, None))
+    return res.x[:-1]
+
+def hs_intersection(A, b):
+    interior_point = feasible_point(A, b)
+    halfspaces = np.hstack((A, -b[:, None]))
+    hs = HalfspaceIntersection(halfspaces, interior_point)
+    return hs
+
+
+def add_bbox(A, b, xrange, yrange):
+    A = np.vstack((A, [
+        [-1,  0],
+        [ 1,  0],
+        [ 0, -1],
+        [ 0,  1],
+    ]))
+    b = np.hstack((b, [-xrange[0], xrange[1], -yrange[0], yrange[1]]))
+    return A, b
+
+def solve_convex_set(A, b, bbox, ax=None):
+    A_, b_ = add_bbox(A, b, *bbox)
+    interior_point = feasible_point(A_, b_)
+    hs = hs_intersection(A_, b_)
+    points = hs.intersections
+    hull = ConvexHull(points)
+    return points[hull.vertices], interior_point, hs
+
+def gen_n_point_in_polygon(n_point, polygon, tol = 0.1):
+    """
+    -----------
+    Description
+    -----------
+    Generate n regular spaced points within a shapely Polygon geometry
+    function from stackoverflow
+    -----------
+    Parameters
+    -----------
+    - n_point (int) : number of points required
+    - polygon (shapely.geometry.polygon.Polygon) : Polygon geometry
+    - tol (float) : spacing tolerance (Default is 0.1)
+    -----------
+    Returns
+    -----------
+    - points (list) : generated point geometries
+    -----------
+    Examples
+    -----------
+    >>> geom_pts = gen_n_point_in_polygon(200, polygon)
+    >>> points_gs = gpd.GeoSeries(geom_pts)
+    >>> points_gs.plot()
+    """
+    # Get the bounds of the polygon
+    minx, miny, maxx, maxy = polygon.bounds    
+    # ---- Initialize spacing and point counter
+    spacing = polygon.area / n_point
+    point_counter = 0
+    # Start while loop to find the better spacing according to tolérance increment
+    while point_counter <= n_point:
+        # --- Generate grid point coordinates
+        x = np.arange(np.floor(minx), int(np.ceil(maxx)), spacing)
+        y = np.arange(np.floor(miny), int(np.ceil(maxy)), spacing)
+        xx, yy = np.meshgrid(x,y)
+        # ----
+        pts = [Point(X,Y) for X,Y in zip(xx.ravel(),yy.ravel())]
+        # ---- Keep only points in polygons
+        points = [pt for pt in pts if pt.within(polygon)]
+        # ---- Verify number of point generated
+        point_counter = len(points)
+        spacing -= tol
+    # ---- Return
+    return points
+
+
+import random
+from shapely.geometry import Point
+
+def generate_random(number, polygon):
+    points = []
+    minx, miny, maxx, maxy = polygon.bounds
+    while len(points) < number:
+        pnt = Point(random.uniform(minx, maxx), random.uniform(miny, maxy))
+        if polygon.contains(pnt):
+            points.append(pnt)
+    return points
+
+
+from scipy.stats import multivariate_normal
+
+def fz(z, mu, sigma, w):
+    '''
+    Compute the density of a given z 
+
+    Parameters
+    ----------
+    z : TYPE
+        DESCRIPTION.
+    mu : TYPE
+        DESCRIPTION.
+    sigma : TYPE
+        DESCRIPTION.
+    w : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    None.
+
+    '''
+    n_points = z.shape[0]
+    K = mu.shape[0]
+    pdfs = np.zeros((n_points, K))
     
+    for k1 in range(K):
+        pdfs[:,k1] = multivariate_normal.pdf(z, mean=mu[k1].flatten(), cov=sigma[k1])
+    
+    return np.sum(pdfs * w[n_axis], 1)
+    
+
+def fz(z, mu, sigma, w):
+    '''
+    Compute the density of a given z 
+
+    Parameters
+    ----------
+    z : TYPE
+        DESCRIPTION.
+    mu : TYPE
+        DESCRIPTION.
+    sigma : TYPE
+        DESCRIPTION.
+    w : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    None.
+
+    '''
+    n_points = z.shape[0]
+    K = mu.shape[0]
+    pdfs = np.zeros((n_points, K))
+    
+    for k1 in range(K):
+        pdfs[:,k1] = multivariate_normal.pdf(z, mean=mu[k1].flatten(), cov=sigma[k1])
+    
+    return np.sum(pdfs * w[n_axis], 1)
+
+
+def gmm_cdf(z, mu, sigma, w):
+    '''
+    Compute the density of a given z 
+
+    Parameters
+    ----------
+    z : TYPE
+        DESCRIPTION.
+    mu : TYPE
+        DESCRIPTION.
+    sigma : TYPE
+        DESCRIPTION.
+    w : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    None.
+
+    '''
+    n_points = z.shape[0]
+    K = mu.shape[0]
+    pdfs = np.zeros((n_points, K))
+    
+    for k1 in range(K):
+        pdfs[:,k1] = multivariate_normal.pdf(z, mean=mu[k1].flatten(), cov=sigma[k1])
+    
+    return np.sum(pdfs * w[n_axis], 1)

@@ -33,7 +33,7 @@ from autograd.numpy import newaxis as n_axis
 from gower import gower_matrix
 from sklearn.metrics import silhouette_score
 
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 
 
 
@@ -289,7 +289,8 @@ def M1DGMM(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
             out['lambda_ord'] = deepcopy(lambda_ord)
             out['lambda_categ'] = deepcopy(lambda_categ)
             out['lambda_cont'] = deepcopy(lambda_cont)
-            
+
+            out['eta'] = deepcopy(eta)            
             out['mu'] = deepcopy(mu_s)
             out['sigma'] = deepcopy(sigma_s)
             

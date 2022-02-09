@@ -452,7 +452,7 @@ def density_representation(out, is_3D = False, storage_path = None):
     None. The density plot
 
     '''
-    NBPOINTS = 1000
+    NBPOINTS = 2000
     
     #================================================
     # Fetching the Gaussian moments and observations
@@ -461,8 +461,8 @@ def density_representation(out, is_3D = False, storage_path = None):
     Sigma = out['sigma'][0]
     means = out['mu'][0][:,:,0]
     w = out['best_w_s']
-    xmin, ymin = out['Ez.ys'].min(0) * 0.9
-    xmax, ymax = out['Ez.ys'].max(0) * 1.1
+    xmin, ymin = out['Ez.y'].min(0) * 0.9
+    xmax, ymax = out['Ez.y'].max(0) * 1.1
     
     #================================================
     # Simulate according to the mixture density
@@ -505,7 +505,3 @@ def density_representation(out, is_3D = False, storage_path = None):
         plt.savefig(storage_path)
         
     plt.show()
-    
-#============================================
-# Data processing
-#=============================================
