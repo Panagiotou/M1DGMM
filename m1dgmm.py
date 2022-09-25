@@ -36,7 +36,7 @@ from sklearn.metrics import silhouette_score
 #import matplotlib.pyplot as plt
 
 
-
+# !!! TO DO: Add original data as output
 def M1DGMM(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
           eps = 1E-05, maxstep = 100, seed = None, perform_selec = True,\
               dm =  [], max_patience = 1, use_silhouette = True):# dm small hack to remove 
@@ -297,6 +297,9 @@ def M1DGMM(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
             out['psl_y'] = deepcopy(psl_y)
             out['ps_y'] = deepcopy(ps_y)
 
+            out['psi'] = deepcopy(psi)
+            out['H'] = deepcopy(H)
+            out['w_s'] = deepcopy(w_s)
             
         # Refresh the classes only if they provide a better explanation of the data
         if best_lik < new_lik:

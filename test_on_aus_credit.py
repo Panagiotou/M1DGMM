@@ -86,7 +86,7 @@ p_new = y.shape[1]
 cf_non_enc = np.logical_or(vd_categ_non_enc == 'categorical', vd_categ_non_enc == 'bernoulli')
 
 # Non encoded version of the dataset:
-y_nenc_typed = y_categ_non_enc.astype(np.object)
+y_nenc_typed = y_categ_non_enc.astype(object)
 y_np_nenc = y_nenc_typed.values
 
 # Defining distances over the non encoded features

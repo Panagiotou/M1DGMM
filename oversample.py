@@ -5,6 +5,10 @@ Created on Thu Jan 14 16:55:47 2021
 @author: rfuchs
 """
 
+import random
+from shapely.geometry import Point
+from scipy.stats import multivariate_normal
+
 import autograd.numpy as np
 from scipy.stats import mode 
 from gower import gower_matrix
@@ -573,8 +577,7 @@ def gen_n_point_in_polygon(n_point, polygon, tol = 0.1):
     return points
 
 
-import random
-from shapely.geometry import Point
+
 
 def generate_random(number, polygon):
     points = []
@@ -585,8 +588,6 @@ def generate_random(number, polygon):
             points.append(pnt)
     return points
 
-
-from scipy.stats import multivariate_normal
 
 def fz(z, mu, sigma, w):
     '''

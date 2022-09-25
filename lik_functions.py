@@ -135,9 +135,13 @@ def log_py_zM_ord(lambda_ord, y_ord, zM, k, nj_ord):
 
     log_pyzM = 0
     for j in range(nb_ord):
-        enc = OneHotEncoder(categories = [list(range(nj_ord[j]))])
-        #enc = OneHotEncoder(categories = 'auto')
+        #enc = OneHotEncoder(categories = [list(range(nj_ord[j]))])
+        enc = OneHotEncoder(categories = [np.arange(nj_ord[j]).astype(float)])
 
+        #enc = OneHotEncoder(categories = 'auto')
+        #print('j=', j)
+        #print([np.arange(nj_ord[j]).astype(float)])
+        #print(set(y_ord[:,j][..., n_axis]))
         y_oh_j = enc.fit_transform(y_ord[:,j][..., n_axis]).toarray()
         log_pyzM += log_py_zM_ord_j(lambda_ord[j], y_oh_j, zM, k, nj_ord[j])
         
@@ -224,6 +228,7 @@ def log_py_zM_categ(lambda_categ, y_categ, zM, k, nj_categ):
     
     for j in range(nb_categ):
         classes = [str(nj) for nj in range(nj_categ[j])]
+        
         enc = OneHotEncoder(categories = [classes])
         y_categ_j = enc.fit_transform(y_categ[:,j][..., n_axis]).toarray()
         log_py_zM += log_py_zM_categ_j(lambda_categ[j], y_categ_j, zM, k, nj_categ[j])

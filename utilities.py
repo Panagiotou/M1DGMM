@@ -12,16 +12,13 @@ from matplotlib import cm
 import matplotlib.pyplot as plt
 
 from dython.nominal import theils_u, cramers_v
-from dython.nominal import compute_associations
+from dython.nominal import associations
 from scipy.stats import multivariate_normal as Nd
 
 import autograd.numpy as np
-
-from autograd.numpy.linalg import pinv
+from autograd.numpy.linalg import pinv, norm
 from autograd.numpy import newaxis as n_axis
 from autograd.numpy import transpose as t
-
-
 
 
 ##########################################################################################################
@@ -211,9 +208,9 @@ def column_correlations(df, categorical_columns, theil_u=True):
     return correlation
 
 # TO DO: Harmonize the code with the last plotting function
-def vars_contributions(df, latent_rpz, assoc_thr = 0.0, \
+def vars_contributions(df, latent_rpz, var_distrib = [], assoc_thr = 0.0,\
                        title = 'Contribution of the variables to the latent dimensions',\
-                       storage_path = None):
+                       storage_path = None, unit_cycle = True, ax = None):
     '''
     Plot the contribution of the original variables to the latent dimensions
     constructed by the MDGMM 
@@ -224,14 +221,21 @@ def vars_contributions(df, latent_rpz, assoc_thr = 0.0, \
         The original variables.
     latent_rpz : pandas DataFrame
         The latent representation of the observations issued by the MDGMM.
+    var_distrib: numpy 1d-array 
+        
     assoc_thr : int, optional
         The minimal association (in absolute value) with the latent 
         dimensions for a variable to be displayed. 
         The default is 0.0.
     title : str, optional
         The title of the plot to display. The default is 'Latent representation of the observations'.
-    storage : Bool
+    storage : Bool or str
         The path to store the plot
+    unit_circle: Bool
+        Whether to plot a unit circle along with the contributions. 
+        If False a circle based on the highest contribution is drawn instead
+    ax: matplotlib ax
+        If not None, return the plot as a subplot hosted in the ax object
         
     Returns
     -------
@@ -255,12 +259,23 @@ def vars_contributions(df, latent_rpz, assoc_thr = 0.0, \
     for j1, original_col in enumerate(df.columns):
         for j2, latent_col in enumerate(latent_rpz.columns):
             old_new = pd.DataFrame(df[original_col]).join(pd.DataFrame(latent_rpz[latent_col]))
-            assoc = compute_associations(old_new).iloc[1,0]
+            
+            # Determine the type to compute the associations
+            nominal_columns = []
+            if len(var_distrib) != 0:
+                if (var_distrib[j1] != 'continuous') & (var_distrib[j1] != 'binomial'):
+                    nominal_columns.append(original_col)
+            
+            assoc = associations(old_new, nominal_columns = nominal_columns,compute_only=True)['corr'].iloc[1,0]
             corrs[j1, j2] = assoc
     
-    
     # Plot a variable factor map for the first two dimensions.
-    (fig, ax) = plt.subplots(figsize=(8, 8))
+    if ax == None:
+        (fig, ax) = plt.subplots(figsize=(8, 8))
+        existing_ax = False
+    else:
+        existing_ax = True
+        
     for i in range(df.shape[1]):
         
         if (np.abs(corrs[i]) > assoc_thr).all():
@@ -268,30 +283,37 @@ def vars_contributions(df, latent_rpz, assoc_thr = 0.0, \
                      0,  # Start the arrow at the origin
                      corrs[i, 0],  #0 for PC1
                      corrs[i, 1],  #1 for PC2
-                     head_width=0.1,
-                     head_length=0.1)
+                     head_width=0.02,
+                     head_length=0.02)
         
-            plt.text(corrs[i, 0] + 0.05,
-                     corrs[i, 1] + 0.05,
+            ax.text(corrs[i, 0] * 1.01,
+                     corrs[i, 1] * 1.01,
                      s = df.columns.values[i])
-    
-    
+   
+    # Plot cycle towards predictions
     an = np.linspace(0, 2 * np.pi, 300)
-    plt.plot(np.cos(an), np.sin(an))  # Add a unit circle for scale
+
+    if unit_cycle:
+        ax.plot(np.cos(an), np.sin(an))  # Add a unit circle for scale
+    else:
+        offset = norm(corrs, axis = 1).max() * 1.2
+        ax.plot(offset * np.cos(an), offset * np.sin(an))  # Add a unit circle for scale
+        
     plt.axis('equal')
-    plt.xlabel('Latent dimension 1', fontsize = 16)
-    plt.ylabel('Latent dimension 2', fontsize = 16)
+    ax.set_xlabel('Latent dimension 1', fontsize = 16)
+    ax.set_ylabel('Latent dimension 2', fontsize = 16)
     ax.set_title(title)
     
     if storage_path:
         plt.savefig(storage_path)
         
-    plt.show()
-
+    if not(existing_ax):
+        plt.show()
+    
     return corrs
 
 # Create a plotting utility file
-def obs_representation(obs_classes, latent_rpz, title = 'Latent representation of the observations',
+def obs_representation(obs_classes, latent_rpz = None, title = 'Latent representation of the observations',
                        storage_path = None):
     '''
     Plot the observations in the latent space
@@ -311,7 +333,7 @@ def obs_representation(obs_classes, latent_rpz, title = 'Latent representation o
     -------
     None. The plot of the observations in the latent space
     '''
-    
+            
     latent_dim = latent_rpz.shape[1]
 
     if latent_dim > 2:
@@ -345,7 +367,8 @@ def obs_representation(obs_classes, latent_rpz, title = 'Latent representation o
         plt.savefig(storage_path)
         
     plt.show()
-    
+
+# !!! Put symbols instead of cluster number
 def cluster_belonging_conf(out, latent_rpz, title = 'Cluster belonging probability',
                        storage_path = None):
     '''
@@ -434,7 +457,7 @@ def mixtureDensity(x, y, w, mu, Sigma):
     return z
     
 
-def density_representation(out, is_3D = False, storage_path = None):
+def density_representation(out, is_3D = False, storage_path = None, weighted = True):
     '''
     Plot the density of the DGMM distribution estimated in the latent space
 
@@ -446,6 +469,8 @@ def density_representation(out, is_3D = False, storage_path = None):
         Whether to plot a 3D (alternative: 2D density). The default is False.
     storage : Bool
         The path to store the plot
+    weighted: Bool
+        Whether to use the mixture weights or just represent the clusters location
         
     Returns
     -------
@@ -461,8 +486,8 @@ def density_representation(out, is_3D = False, storage_path = None):
     Sigma = out['sigma'][0]
     means = out['mu'][0][:,:,0]
     w = out['best_w_s']
-    xmin, ymin = out['Ez.y'].min(0) * 0.9
-    xmax, ymax = out['Ez.y'].max(0) * 1.1
+    xmin, ymin = out['Ez.y'].min(0) - 0.5
+    xmax, ymax = out['Ez.y'].max(0) + 0.5
     
     #================================================
     # Simulate according to the mixture density
@@ -471,7 +496,12 @@ def density_representation(out, is_3D = False, storage_path = None):
     xx=np.linspace(xmin, xmax, NBPOINTS)
     yy=np.linspace(ymin, ymax, NBPOINTS)
     x,y=np.meshgrid(xx,yy)
-    z=mixtureDensity(x, y, w,  means, Sigma)
+    if weighted:
+        z=mixtureDensity(x, y, w,  means, Sigma)
+    else:
+        equal_weights = np.ones_like(w)
+        z=mixtureDensity(x, y, equal_weights,  means, Sigma)
+
     
     #================================================
     # Plotting the density

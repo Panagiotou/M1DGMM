@@ -68,15 +68,19 @@ var_distrib = np.array(['continuous', 'bernoulli', 'categorical', 'continuous',\
                         'categorical']) 
     
 # Ordinal data already encoded
- 
+le = LabelEncoder()
+for col_idx, colname in enumerate(y.columns):
+    if var_distrib[col_idx] == 'ordinal': 
+        y[colname] = le.fit_transform(y[colname])
+        
 y_categ_non_enc = deepcopy(y)
 vd_categ_non_enc = deepcopy(var_distrib)
 
 # Encode categorical datas
-#le = LabelEncoder()
-#for col_idx, colname in enumerate(y.columns):
-    #if var_distrib[col_idx] == 'categorical': 
-        #y[colname] = le.fit_transform(y[colname])
+le = LabelEncoder()
+for col_idx, colname in enumerate(y.columns):
+    if var_distrib[col_idx] == 'categorical': 
+        y[colname] = le.fit_transform(y[colname])
 
 # Encode binary data
 le = LabelEncoder()
@@ -98,14 +102,14 @@ p_new = y.shape[1]
 cf_non_enc = np.logical_or(vd_categ_non_enc == 'categorical', vd_categ_non_enc == 'bernoulli')
 
 # Non encoded version of the dataset:
-y_nenc_typed = y_categ_non_enc.astype(np.object)
+y_nenc_typed = y_categ_non_enc.astype(object)
 y_np_nenc = y_nenc_typed.values
 
 # Defining distances over the non encoded features
 dm = gower_matrix(y_nenc_typed, cat_features = cf_non_enc) 
 
-dtype = {y.columns[j]: np.float64 if (var_distrib[j] != 'bernoulli') and \
-        (var_distrib[j] != 'categorical') else np.str for j in range(p_new)}
+dtype = {y.columns[j]: float if (var_distrib[j] != 'bernoulli') and \
+        (var_distrib[j] != 'categorical') else str for j in range(p_new)}
 
 y = y.astype(dtype, copy=True)
 
@@ -237,7 +241,6 @@ maxstep = 100
 nb_trials= 30
 m1dgmm_res = pd.DataFrame(columns = ['it_id', 'micro', 'macro', 'silhouette'])
 
-
 for i in range(nb_trials):
 
     print(i)
@@ -248,7 +251,9 @@ for i in range(nb_trials):
         out = M1DGMM(y_np, n_clusters, r, k, prince_init, var_distrib, nj, it,\
                      eps, maxstep, seed = None, perform_selec = False)
         m, pred = misc(labels_oh, out['classes'], True) 
-
+        
+    
+        
         sil = silhouette_score(dm, pred, metric = 'precomputed')
         micro = precision_score(labels_oh, pred, average = 'micro')
         macro = precision_score(labels_oh, pred, average = 'macro')
@@ -258,6 +263,7 @@ for i in range(nb_trials):
 
         m1dgmm_res = m1dgmm_res.append({'it_id': i + 1, 'micro': micro, 'macro': macro, \
                                     'silhouette': sil}, ignore_index=True)
+        
     except:
         m1dgmm_res = m1dgmm_res.append({'it_id': i + 1, 'micro': np.nan, 'macro': np.nan, \
                                     'silhouette': np.nan}, ignore_index=True)
@@ -268,3 +274,10 @@ m1dgmm_res.mean()
 m1dgmm_res.std()
 
 m1dgmm_res.to_csv(res_folder + '/m1dgmm_res_famd.csv')
+
+
+import seaborn as sns
+import matplotlib.pyplot as plt
+df = sns.load_dataset("titanic")
+sns.boxplot(x=pd.Series(aris), orient = 'h')
+plt.title('ARI distribution ground truth vs M1DGMM on the heart dataset (30 runs)')

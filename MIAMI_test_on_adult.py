@@ -234,6 +234,7 @@ for design in experiment_designs:
             # Store the predictions
             pred.to_csv(res_folder + design + '/' + sub_design +  '/' + 'preds' + str(filenum) + '.csv',\
                              index = False)
+            #break
   
 acceptance_rate = pd.DataFrame(acceptance_rate)
 acceptance_rate.to_csv('pseudo_adult/acceptance_rate.csv')

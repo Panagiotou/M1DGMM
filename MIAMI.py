@@ -15,7 +15,7 @@ from MCEM_DGMM import draw_z_s
 from utilities import vars_contributions
 
 from scipy.special import logit
-from shapely.geometry import Polygon
+#from shapely.geometry import Polygon
 from oversample import solve_convex_set                 
 import autograd.numpy as np
 
@@ -29,7 +29,7 @@ from copy import deepcopy
 def MIAMI(y, n_clusters, r, k, init, var_distrib, nj, authorized_ranges,\
           target_nb_pseudo_obs = 500, it = 50, \
           eps = 1E-05, maxstep = 100, seed = None, perform_selec = True,\
-              dm = [], max_patience = 1): # dm: Hack to remove
+              dm = [], max_patience = 1, pretrained_model = False): # dm, pretrained_model: Hack to remove
     
     ''' Complete the missing values using a trained M1DGMM
     
@@ -63,14 +63,19 @@ def MIAMI(y, n_clusters, r, k, init, var_distrib, nj, authorized_ranges,\
     assert len(k) < 2 # Not implemented for deeper MDGMM for the moment
     
     
-    out = M1DGMM(y, n_clusters, r, k, init, var_distrib, nj, it,\
+    if pretrained_model:
+        # !!! TO DO: Delete the useless keys
+        out = deepcopy(init)
+    else:
+        out = M1DGMM(y, n_clusters, r, k, init, var_distrib, nj, it,\
              eps, maxstep, seed, perform_selec = perform_selec,\
                  dm = dm, max_patience = max_patience, use_silhouette = True)
-        
+    
     # Compute the associations
-    vars_contributions(pd.DataFrame(y, columns = cols), out['Ez.y'], assoc_thr = 0.0, \
-                           title = 'Contribution of the variables to the latent dimensions',\
-                           storage_path = None)
+    #vars_contributions(pd.DataFrame(y, columns = cols), out['Ez.y'], assoc_thr = 0.0, \
+                           #title = 'Contribution of the variables to the latent dimensions',\
+                           #storage_path = None)
+    
         
     # Upacking the model from the M1DGMM output
     p = y.shape[1]
