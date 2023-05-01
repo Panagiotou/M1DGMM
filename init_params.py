@@ -148,19 +148,19 @@ def dim_reduce_init(y, n_clusters, k, r, nj, var_distrib, use_famd = False, seed
         print('PCA init')
 
         pca = prince.PCA(n_components = r[0], n_iter=3, rescale_with_mean=True,\
-            rescale_with_std=True, copy=True, check_input=True, engine='auto',\
+            rescale_with_std=True, copy=True, check_input=True, engine='sklearn',\
                 random_state = seed)
         z1 = pca.fit_transform(y).values
 
     elif use_famd:
         famd = prince.FAMD(n_components = r[0], n_iter=3, copy=True, check_input=False, \
-                               engine='auto', random_state = seed)
+                               engine='sklearn', random_state = seed)
         z1 = famd.fit_transform(y).values
             
     else:
         # Check input = False to remove
         mca = prince.MCA(n_components = r[0], n_iter=3, copy=True,\
-                         check_input=False, engine='auto', random_state = seed)
+                         check_input=False, engine='sklearn', random_state = seed)
         z1 = mca.fit_transform(y).values
         
     z = [z1]

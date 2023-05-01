@@ -201,7 +201,7 @@ class LinearOrdinalRegression():
         return X_data, (X_data - X_mean) / X_std, X_mean, X_std
 
     def _prepare_y(self, y):
-        y_data = np.asarray(y).astype(np.int)
+        y_data = np.asarray(y).astype(int)
         y_values = np.sort(np.unique(y_data))
 
         self.n_classes = len(y_values)
@@ -255,6 +255,8 @@ class LinearOrdinalRegression():
         hessian_function = Jacobian(self._gradient, method='forward')
         H = hessian_function(coefficients, X_data, y_data)
         P = self._compute_basis_change()
+        print(X_data.shape)
+        print(H.shape)
         return np.sqrt(np.diagonal(P.dot(inv(H)).dot(P.T)))
 
     def _compute_basis_change(self):

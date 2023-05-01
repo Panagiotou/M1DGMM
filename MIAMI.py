@@ -27,7 +27,7 @@ from scipy.linalg import block_diag
 from copy import deepcopy
 
 def MIAMI(y, n_clusters, r, k, init, var_distrib, nj, authorized_ranges,\
-          target_nb_pseudo_obs = 500, it = 50, \
+          target_nb_pseudo_obs = 500, nb_points=1, it = 50, \
           eps = 1E-05, maxstep = 100, seed = None, perform_selec = True,\
               dm = [], max_patience = 1, pretrained_model = False): # dm, pretrained_model: Hack to remove
     
@@ -100,7 +100,7 @@ def MIAMI(y, n_clusters, r, k, init, var_distrib, nj, authorized_ranges,\
     y_std = y[:,var_distrib == 'continuous'].astype(float).std(axis = 0,\
                                                                     keepdims = True)
     
-    nb_points = 200
+    # nb_points = 200
     
     # Bloc de contraintes
     '''
@@ -350,23 +350,29 @@ def MIAMI(y, n_clusters, r, k, init, var_distrib, nj, authorized_ranges,\
         #===================================================
         # Acceptation rule
         #===================================================
-        
-        # Check that each variable is in the good range 
-        y_new_exp = np.expand_dims(y_new, 1)
-        
-        total_nb_obs_generated += len(y_new)
-        
-        mask = np.logical_and(y_new_exp >= authorized_ranges[0][np.newaxis],\
-                       y_new_exp <= authorized_ranges[1][np.newaxis]) 
+        if not authorized_ranges is None:
+            # Check that each variable is in the good range 
+            y_new_exp = np.expand_dims(y_new, 1)
             
-        # Keep an observation if it lies at least into one of the ranges possibility
-        mask = np.any(mask.mean(2) == 1, axis = 1)   
-        
-        y_new = y_new[mask]
+            
+            mask = np.logical_and(y_new_exp >= authorized_ranges[0][np.newaxis],\
+                        y_new_exp <= authorized_ranges[1][np.newaxis]) 
+                
+            # Keep an observation if it lies at least into one of the ranges possibility
+            mask = np.any(mask.mean(2) == 1, axis = 1)   
+            
+            y_new = y_new[mask]
+
         y_new_all.append(y_new)
+
+        total_nb_obs_generated += len(y_new)
+
         nb_pseudo_obs = len(np.concatenate(y_new_all))
-        
-        zz.append(z[mask])
+
+        if not authorized_ranges is None:
+            zz.append(z[mask])
+        else:
+            zz.append(z)
         #print(nb_pseudo_obs)
         
     # Keep target_nb_pseudo_obs pseudo-observations
