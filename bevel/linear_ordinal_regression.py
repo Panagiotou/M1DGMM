@@ -75,6 +75,9 @@ class LinearOrdinalRegression():
         gamma[0] = gamma[0] + X_mean.dot(self.beta_)
         self.alpha_ = np.cumsum(gamma)
 
+
+        # this leads to "Singular Matrix" sometimes !!!
+
         self.se_ = self._compute_standard_errors(np.append(self.beta_, gamma), X_data, y_data)
         self.p_values_ = self._compute_p_values()
         self.score_ = self._compute_score(X_data, y_data)

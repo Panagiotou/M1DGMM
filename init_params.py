@@ -324,5 +324,8 @@ def dim_reduce_init(y, n_clusters, k, r, nj, var_distrib, use_famd = False, seed
     init['lambda_cont'] = lambda_cont
     init['lambda_categ'] = lambda_categ
     
-    return init
+    if use_famd:
+        return init, z1
+
+    return init, None
 

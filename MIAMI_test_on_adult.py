@@ -21,6 +21,7 @@ from data_preprocessing import compute_nj
 
 import autograd.numpy as np
 #from table_evaluator import TableEvaluator
+from scipy.spatial.distance import pdist, squareform
 
 #import seaborn as sns
 
@@ -165,9 +166,7 @@ dtype = {train.columns[j]: dtypes_dict[var_distrib[j]] for j in range(p)}
 train = train.astype(dtype, copy=True)
 numobs = len(train)
 
-print("Computing Gower")
-# Defining distances over the features
-dm = gower_matrix(train, cat_features = cat_features) 
+
 
 #*****************************************************************
 # Sampling rules
@@ -204,14 +203,24 @@ else:
 # Run MIAMI
 #*****************************************************************
 
-print("Run MIAMI")    
-init = dim_reduce_init(train, n_clusters, k, r, nj, var_distrib, seed = None,\
+print("Initialize dimensionality reduction")    
+init, transformed_famd_data  = dim_reduce_init(train, n_clusters, k, r, nj, var_distrib, seed = None,\
                                 use_famd=True)
+
+print("Computing distance matrix")
+# Defining distances over the features
+# dm = gower_matrix(train, cat_features = cat_features) 
+
+# Compute the pairwise distances between all elements in my_array
+distances = pdist(transformed_famd_data)
+
+# Convert the pairwise distances to a square matrix
+dm = squareform(distances)
 
 print("Training")
 out = MIAMI(train, n_clusters, r, k, init, var_distrib, nj, authorized_ranges, nb_pobs, it,\
                 eps, maxstep, seed, perform_selec = False, dm = dm, max_patience = 0)
-print(out)
+# print(out)
 print('MIAMI has kept one observation over', round(1 / out['share_kept_pseudo_obs']),\
         'observations generated')
     
