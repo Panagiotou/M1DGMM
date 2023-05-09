@@ -79,7 +79,7 @@ def draw_new_categ(lambda_categ, z_new, nj_categ):
     y_categ_new = np.full((new_nb_obs, nb_categ), np.nan)
   
     for j in range(nb_categ):
-        
+            
         zM_broad = np.expand_dims(np.expand_dims(z_new, 1), 2)
         lambda_categ_j_ = lambda_categ[j].reshape(nj_categ[j], r + 1, order = 'C')
 

@@ -96,166 +96,11 @@ def MIAMI(y, n_clusters, r, k, init, var_distrib, nj, authorized_ranges,\
     nj_bin = nj[pd.Series(var_distrib).isin(['bernoulli', 'binomial'])].astype(int)
     nj_ord = nj[var_distrib == 'ordinal'].astype(int)
     nj_categ = nj[var_distrib == 'categorical'].astype(int)
-    
+
     y_std = y[:,var_distrib == 'continuous'].astype(float).std(axis = 0,\
                                                                     keepdims = True)
     
     # nb_points = 200
-    
-    # Bloc de contraintes
-    '''
-    is_constrained = np.isfinite(authorized_ranges).any(1)[0]
-    is_min_constrained = np.isfinite(authorized_ranges[0])[0]
-    is_max_constrained = np.isfinite(authorized_ranges[1])[0]
-
-    is_continuous = (var_distrib == 'continuous') | (var_distrib == 'binomial')
-    min_unconstrained_cont = is_continuous & ~is_min_constrained
-    max_unconstrained_cont = is_continuous & ~is_max_constrained
-    
-    authorized_ranges[0] = np.where(min_unconstrained_cont, np.min(y, 0), authorized_ranges[0])
-    authorized_ranges[1] = np.where(max_unconstrained_cont, np.max(y, 0), authorized_ranges[1])
-    '''
-
-    #from scipy.stats import norm
-    '''
-    #==============================================
-    # Constraints determination
-    #==============================================
-    
-    # Force to stay in the support for binomial and continuous variables
-
-    #authorized_ranges = np.expand_dims(np.stack([[-np.inf,np.inf] for var in var_distrib]).T, 1)
-    #authorized_ranges[:, 0, 8] = [0, 0]  # Of more than 60 years old
-    #authorized_ranges[:, 0, 0] = [-np.inf, np.inf]  # Of more than 60 years old
-
-    # Look for the constrained variables
-    #authorized_ranges[:,:,0] = np.array([[-np.inf],[np.inf]])
-    is_constrained = np.isfinite(authorized_ranges).any(1)[0]
-    
-    #bbox = np.dstack([Ez_y.min(0),Ez_y.max(0)])
-    #bbox * np.array([0.6, 1.4])
-    
-    proba_min = 1E-3
-    proba = proba_min
-      
-    epsilon = 1E-12
-    best_A = []
-    best_b = []
-    
-    is_solution = True
-    while is_solution:
-        b = []#np.array([])
-        A = []#np.array([[]]).reshape((0, r[0]))
-        
-        bbox = np.array([[-10, 10]] * r[0]) # !!! A corriger
-        
-        alpha = 1 - proba
-        q = norm.ppf(1 - alpha / 2)  
-        
-        #=========================================
-        # Store the constraints for each datatype
-        #=========================================
-
-        for j in range(p):
-            if is_constrained[j]:
-                bounds_j = authorized_ranges[:,:,j]
-                # The index of the variable among the variables of the same type
-                idx_among_type = (var_distrib[:j] == var_distrib[j]).sum()
-                
-                if var_distrib[j] == 'continuous':
-                    # Lower bound
-                    lb_j = bounds_j[0] / y_std[0, idx_among_type] - lambda_cont[idx_among_type, 0] + q
-                    A.append(- lambda_cont[idx_among_type,1:])
-                    b.append(- lb_j)
-                    
-                    # Upper bound                                
-                    ub_j = bounds_j[1] / y_std[0, idx_among_type] - lambda_cont[idx_among_type, 0] - q
-                    A.append(lambda_cont[idx_among_type,1:])
-                    b.append(ub_j)
-                
-                elif var_distrib[j] == 'binomial':
-                    idx_among_type = ((var_distrib[:j] == 'bernoulli') | (var_distrib[:j] == 'binomial')).sum()
-    
-                    # Lower bound
-                    lb_j = bounds_j[0]
-                    lb_j = logit(lb_j / nj_bin[idx_among_type]) - lambda_bin[idx_among_type,0]
-                    A.append(- lambda_bin[idx_among_type,1:])
-                    b.append(- lb_j)
-                    
-                    # Upper bound
-                    ub_j = bounds_j[1]
-                    ub_j = logit(ub_j / nj_bin[idx_among_type]) - lambda_bin[idx_among_type,0]
-                    
-                    A.append(lambda_bin[idx_among_type, 1:])
-                    b.append(ub_j)
-                    
-                elif var_distrib[j] == 'bernoulli':
-                    idx_among_type = ((var_distrib[:j] == 'bernoulli') | (var_distrib[:j] == 'binomial')).sum()
-                    assert bounds_j[0] == bounds_j[1] # !!! To improve
-                    
-                    # Lower bound
-                    lb_j = proba if bounds_j[0] == 1 else  0 + epsilon
-                    lb_j = logit(lb_j / nj_bin[idx_among_type]) - lambda_bin[idx_among_type,0]
-                    A.append(- lambda_bin[idx_among_type,1:])
-                    b.append(- lb_j)
-                    
-                    # Upper bound
-                    ub_j = 1 - epsilon if bounds_j[0] == 1 else 1 - proba
-                    ub_j = logit(ub_j / nj_bin[idx_among_type]) - lambda_bin[idx_among_type,0]
-                    A.append(lambda_bin[idx_among_type, 1:])
-                    b.append(ub_j)
-                    
-                elif var_distrib[j] ==  'categorical':
-                    continue
-                    assert bounds_j[0] == bounds_j[1] # !!! To improve
-                    modality_idx = int(bounds_j[0][0])        
-                    
-                    # Define the probability to draw the modality of interest to proba
-                    pi = np.full(nj_categ[idx_among_type],\
-                                 (1 - proba) / (nj_categ[idx_among_type] - 1))
-                       
-                    # For the inversion of the softmax a constant C = 0 is taken:
-                    pi[modality_idx] = proba
-                    lb_j = np.log(pi) - lambda_categ[idx_among_type][:, 0] 
-    
-                    # -1 Mask
-                    mask = np.ones((nj_categ[idx_among_type], 1))
-                    mask[modality_idx] = -1
-                    A.append(lambda_categ[idx_among_type][:, 1:] * mask)
-                    b.append(lb_j * mask[:,0])
-    
-                    
-                elif var_distrib[j] == 'ordinal':
-                    assert bounds_j[0] == bounds_j[1] # !!! To improve
-                    modality_idx = int(bounds_j[0][0])  
-                    
-                    RuntimeError('Not implemented for the moment')
-                        
-        #=========================================
-        # Try if the solution is feasible
-        #=========================================
-        try:
-
-            points, interior_point, hs = solve_convex_set(np.reshape(A, (-1, r[0]),\
-                                    order = 'C'), np.hstack(b), bbox)
-        
-            # If yes store the new constraints
-            best_A = deepcopy(A)
-            best_b = deepcopy(b)
-            
-            proba = np.min([1.05 * proba, 0.8])
-            if proba >= 0.8:
-                is_solution = False
-        
-        except QhullError:
-            is_solution = False
-                    
-            
-    best_A = np.reshape(best_A, (-1, r[0]), order = 'C')
-    best_b = np.hstack(best_b)
-    points, interior_point, hs = solve_convex_set(best_A, best_b, bbox)
-    polygon = Polygon(points)    
-    '''
     #=======================================================
     # Data augmentation part
     #=======================================================
@@ -292,7 +137,7 @@ def MIAMI(y, n_clusters, r, k, init, var_distrib, nj, authorized_ranges,\
         
         # Draw some z^{(1)} | Theta using z^{(1)} | s, Theta
         z = np.zeros((nb_points, r[0]))
-        
+
         z0_s = multivariate_normal(size = (nb_points, 1), \
             mean = mu.flatten(order = 'C'), cov = block_diag(*sigma))
         z0_s = z0_s.reshape(nb_points, k[0], r[0], order = 'C')
@@ -310,11 +155,11 @@ def MIAMI(y, n_clusters, r, k, init, var_distrib, nj, authorized_ranges,\
         y_ord_new = []
         y_cont_new = []
         
+
         y_bin_new.append(draw_new_bin(lambda_bin, z, nj_bin))
         y_categ_new.append(draw_new_categ(lambda_categ, z, nj_categ))
         y_ord_new.append(draw_new_ord(lambda_ord, z, nj_ord))
         y_cont_new.append(draw_new_cont(lambda_cont, z))
-            
         # Stack the quantities
         y_bin_new = np.vstack(y_bin_new)
         y_categ_new = np.vstack(y_categ_new)

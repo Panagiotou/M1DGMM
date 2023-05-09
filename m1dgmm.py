@@ -65,7 +65,6 @@ def M1DGMM(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
 
     prev_lik = - 1E16
     best_lik = -1E16
-    
     best_sil = -1 
     new_sil = -1 
         
@@ -132,8 +131,7 @@ def M1DGMM(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
     # or if we have not reached the maximum patience and if a new architecture was looked for
     # in the previous iteration
     while ((it_num < it) & (ratio > eps) & (patience <= max_patience)) | is_looking_for_better_arch:
-        print(it_num)
-
+        print("Iteration", it_num)
         # The clustering layer is the one used to perform the clustering 
         # i.e. the layer l such that k[l] == n_clusters
         
@@ -423,8 +421,8 @@ def M1DGMM(y, n_clusters, r, k, init, var_distrib, nj, it = 50, \
             
         prev_lik = deepcopy(new_lik)
         it_num = it_num + 1
-        print(likelihood)
-        print(silhouette)
+        print("Likelyhood", likelihood)
+        print("silhouette", silhouette)
         
 
     out['likelihood'] = likelihood

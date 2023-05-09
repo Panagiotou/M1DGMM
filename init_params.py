@@ -169,7 +169,6 @@ def dim_reduce_init(y, n_clusters, k, r, nj, var_distrib, use_famd = False, seed
     #==============================================================
     # Set the shape parameters of each data type
     #==============================================================    
-    
     y_bin = y[:, np.logical_or(var_distrib == 'bernoulli',\
                                var_distrib == 'binomial')].astype(int)
     nj_bin = nj[np.logical_or(var_distrib == 'bernoulli',\
