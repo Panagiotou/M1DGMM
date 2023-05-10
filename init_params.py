@@ -80,7 +80,8 @@ def get_MFA_params(zl, kl, rl_nextl):
         
         clusters_found, count = np.unique(s, return_counts = True)
 
-        if (len(clusters_found) == kl):# & (count >= 5).all():
+
+        if (len(clusters_found) == kl) and (count >= 2).all() :# & (count >= 5).all():
             not_all_groups = False
             
         empty_count_counter += 1
@@ -201,6 +202,8 @@ def dim_reduce_init(y, n_clusters, k, r, nj, var_distrib, use_famd = False, seed
     paths_pred = np.zeros((numobs, L))
     
     for l in range(L):
+        print(np.std(z[l],axis=0))
+
         params = get_MFA_params(z[l], k[l], r[l:])
         eta.append(params['eta'][..., n_axis])
         H.append(params['H'])
