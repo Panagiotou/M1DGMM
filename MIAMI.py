@@ -223,7 +223,7 @@ def MIAMI(y, n_clusters, r, k, init, var_distrib, nj, authorized_ranges,\
     # Keep target_nb_pseudo_obs pseudo-observations
     y_new_all = np.concatenate(y_new_all)
     y_new_all = y_new_all[:target_nb_pseudo_obs]
-    
+    zz = zz[:target_nb_pseudo_obs]
     #y_all = np.vstack([y, y_new_all])
     share_kept_pseudo_obs = len(y_new_all) / total_nb_obs_generated
     
