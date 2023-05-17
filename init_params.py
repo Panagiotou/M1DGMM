@@ -19,6 +19,7 @@ from sklearn.preprocessing import LabelEncoder
 from data_preprocessing import gen_categ_as_bin_dataset, bin_to_bern
     
 import prince
+from light_famd.famd import FAMD as LIGHT_FAMD
 import pandas as pd
 
 # Dirty local hard copy of the Github bevel package
@@ -116,7 +117,7 @@ def get_MFA_params(zl, kl, rl_nextl):
     return params
 
 
-def dim_reduce_init(y, n_clusters, k, r, nj, var_distrib, use_famd = False, seed = None):
+def dim_reduce_init(y, n_clusters, k, r, nj, var_distrib, use_famd = False, seed = None, use_light_famd=False):
     ''' Perform dimension reduction into a continuous r dimensional space and determine 
     the init coefficients in that space
     
@@ -157,7 +158,10 @@ def dim_reduce_init(y, n_clusters, k, r, nj, var_distrib, use_famd = False, seed
         famd = prince.FAMD(n_components = r[0], n_iter=3, copy=True, check_input=False, \
                                engine='sklearn', random_state = seed)
         z1 = famd.fit_transform(y).values
-            
+    elif use_light_famd:
+        famd = LIGHT_FAMD(n_components = r[0], n_iter=3, copy=True, check_input=False, \
+                    engine='sklearn', random_state = seed)
+        z1 = famd.fit_transform(y)
     else:
         # Check input = False to remove
         mca = prince.MCA(n_components = r[0], n_iter=3, copy=True,\
@@ -326,8 +330,8 @@ def dim_reduce_init(y, n_clusters, k, r, nj, var_distrib, use_famd = False, seed
     init['lambda_cont'] = lambda_cont
     init['lambda_categ'] = lambda_categ
     
-    if use_famd:
-        return init, z1
+    if use_famd or use_light_famd:
+        return init, z1, famd
 
-    return init, None
+    return init, None, None
 
